@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, useRef } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
+import { getAuthCookie, setAuthCookie, clearAuthCookie } from './cross-domain-auth'
 
 interface UserProfile {
   company_name?: string
@@ -51,14 +52,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [mustChangePassword, setMustChangePassword] = useState(false) // Track if password change is required
   const isSigningOutRef = useRef(false) // Track if we're in the process of signing out (use ref to avoid closure issues)
 
-  // Try to load from localStorage immediately on mount
+  // Try to load from localStorage or cross-domain cookie on mount
   useEffect(() => {
     const tryLoadFromCache = async () => {
       try {
         if (process.env.NODE_ENV === 'development') {
           console.log('🔍 Checking for cached session...')
         }
-        const { data: { session } } = await supabase.auth.getSession()
+        
+        // First check if there's already a session in Supabase
+        let { data: { session } } = await supabase.auth.getSession()
+        
+        // If no session, try to restore from cross-domain cookie (SSO from main site)
+        if (!session) {
+          console.log('🔍 No local session, checking for cross-domain auth cookie...')
+          const cookieTokens = getAuthCookie()
+          
+          if (cookieTokens?.access_token && cookieTokens?.refresh_token) {
+            console.log('🔑 Found cross-domain auth cookie, restoring session...')
+            
+            // Try to set the session using the tokens from the cookie
+            const { data, error } = await supabase.auth.setSession({
+              access_token: cookieTokens.access_token,
+              refresh_token: cookieTokens.refresh_token
+            })
+            
+            if (error) {
+              console.error('Error restoring session from cookie:', error)
+              // Cookie might be expired, clear it
+              clearAuthCookie()
+            } else if (data.session) {
+              console.log('✅ Session restored from cross-domain cookie!')
+              session = data.session
+            }
+          }
+        }
         
         if (session?.user) {
           const cachedStatus = getAdminStatusFromCache(session.user.id)
@@ -361,6 +389,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       
+      // Update cross-domain auth cookie on session changes (login, token refresh)
+      if (session && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
+        setAuthCookie({
+          access_token: session.access_token,
+          refresh_token: session.refresh_token,
+          expires_at: session.expires_at
+        })
+      }
+      
       // Only reset admin check if the user actually changed
       if (previousUserId !== newUserId) {
         console.log('User changed, resetting admin status')
@@ -494,12 +531,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     
     // If successful, immediately update the user state and check admin status
-    if (!error && data.user) {
+    if (!error && data.user && data.session) {
       setUser(data.user)
       setSession(data.session)
       setLoading(false)
       // Immediately check admin status after login to ensure UI updates
       await checkAdminStatus(data.user, true)
+      
+      // Set cross-domain auth cookie for SSO
+      setAuthCookie({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+        expires_at: data.session.expires_at
+      })
     }
     
     return { error }
@@ -525,6 +569,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         clearAdminStatusCache() // Clear all if no user ID
       }
+      
+      // Clear cross-domain auth cookie
+      clearAuthCookie()
       
       // Check if there's an active session first
       const { data: { session } } = await supabase.auth.getSession()
