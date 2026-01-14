@@ -77,3 +77,13 @@ npm start
 ```
 
 For deployment, ensure all environment variables are set in your hosting platform.
+
+### Docker Deployment
+
+See [DOCKER.md](./DOCKER.md) for Docker deployment instructions.
+
+### Dokploy Deployment
+
+If you're deploying to Dokploy and experiencing DNS errors, see:
+- [DOKPLOY-QUICK-FIX.md](./DOKPLOY-QUICK-FIX.md) - Quick fix guide
+- [DOKPLOY.md](./DOKPLOY.md) - Detailed Dokploy deployment guide

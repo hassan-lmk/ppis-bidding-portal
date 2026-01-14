@@ -1,10 +1,16 @@
-# Use build argument to allow alternative registries (for Dokploy/cloud environments)
-# Default to Docker Hub, but can be overridden: docker build --build-arg REGISTRY=ghcr.io
-ARG REGISTRY=docker.io
-ARG NODE_VERSION=20-alpine
+# Alternative Dockerfile for Dokploy
+# Use this if you're experiencing DNS issues with Docker Hub
+# In Dokploy, set the Dockerfile path to: Dockerfile.dokploy
 
-# Stage 1: Dependencies
-FROM ${REGISTRY}/library/node:${NODE_VERSION} AS deps
+# Try alternative registries if Docker Hub is unreachable
+# Option 1: Use Docker Hub directly (default)
+FROM node:20-alpine AS deps
+
+# Option 2: If Docker Hub fails, uncomment one of these:
+# FROM docker.mirror.hashicorp.services/node:20-alpine AS deps
+# FROM registry.cn-hangzhou.aliyuncs.com/acs/node:20-alpine AS deps
+# FROM mcr.microsoft.com/oss/node/node:20-alpine AS deps
+
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
@@ -13,7 +19,11 @@ COPY package.json package-lock.json* ./
 RUN npm ci
 
 # Stage 2: Builder
-FROM ${REGISTRY}/library/node:${NODE_VERSION} AS builder
+FROM node:20-alpine AS builder
+# FROM docker.mirror.hashicorp.services/node:20-alpine AS builder
+# FROM registry.cn-hangzhou.aliyuncs.com/acs/node:20-alpine AS builder
+# FROM mcr.microsoft.com/oss/node/node:20-alpine AS builder
+
 WORKDIR /app
 
 # Copy dependencies from deps stage
@@ -28,8 +38,10 @@ ENV NODE_ENV=production
 RUN npm run build
 
 # Stage 3: Runner
-FROM ${REGISTRY}/library/node:${NODE_VERSION} AS runner
-WORKDIR /app
+FROM node:20-alpine AS runner
+# FROM docker.mirror.hashicorp.services/node:20-alpine AS runner
+# FROM registry.cn-hangzhou.aliyuncs.com/acs/node:20-alpine AS runner
+# FROM mcr.microsoft.com/oss/node/node:20-alpine AS runner
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
