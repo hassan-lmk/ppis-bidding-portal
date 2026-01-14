@@ -1,32 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// Helper function to log downloads
-async function logDownload(areaId: string, userId: string | null, areaName: string, resourceType: string = 'bidding-blocks') {
-  try {
-    const { supabaseAdmin } = await import('../../_supabaseAdmin')
-    const { error: logError } = await (supabaseAdmin as any)
-      .from('document_downloads')
-      .insert({
-        document_id: areaId,
-        user_id: userId, // Can be null for public users
-        resource_type: resourceType,
-        downloaded: new Date().toISOString()
-      })
+// Helper function to log downloads (non-blocking)
+function logDownload(areaId: string, userId: string | null, areaName: string, resourceType: string = 'bidding-blocks') {
+  // Fire and forget - don't block the response
+  // Use setImmediate to ensure it runs after the response is sent
+  setImmediate(async () => {
+    try {
+      const { supabaseAdmin } = await import('../../../lib/supabase')
+      const { error: logError } = await (supabaseAdmin as any)
+        .from('document_downloads')
+        .insert({
+          document_id: areaId,
+          user_id: userId, // Can be null for public users
+          resource_type: resourceType,
+          downloaded: new Date().toISOString()
+        })
 
-    if (logError) {
-      console.error('Error logging download:', logError)
-      // If table doesn't exist, this is expected - user needs to run the SQL script
-      if (logError.code === 'PGRST204') {
-        console.warn('document_downloads table not found. Please run the extend_document_downloads_table.sql script in Supabase Studio.')
+      if (logError) {
+        console.error('Error logging download:', logError)
+        // If table doesn't exist, this is expected - user needs to run the SQL script
+        if (logError.code === 'PGRST204') {
+          console.warn('document_downloads table not found. Please run the extend_document_downloads_table.sql script in Supabase Studio.')
+        }
+        // Don't fail the download if logging fails
+      } else {
+        console.log(`Download logged for ${resourceType}: user ${userId || 'public'}, area ${areaName} (${areaId})`)
+      }
+    } catch (logErr: any) {
+      // Silently handle errors - don't log SSL errors that might be connection issues
+      if (logErr?.message && !logErr.message.includes('SSL') && !logErr.message.includes('tlsv1')) {
+        console.error('Unexpected error logging download:', logErr)
       }
       // Don't fail the download if logging fails
-    } else {
-      console.log(`Download logged for ${resourceType}: user ${userId || 'public'}, area ${areaName} (${areaId})`)
     }
-  } catch (logErr) {
-    console.error('Unexpected error logging download:', logErr)
-    // Don't fail the download if logging fails
-  }
+  })
 }
 
 // Helper function to create file response
@@ -128,39 +135,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Area not found' }, { status: 404 })
     }
 
-    // Determine which PDF to use and if it's a brochure (free download)
+    // Determine which PDF to use
+    // Note: pdf_url array contains bid documents (require purchase)
+    // Brochures use separate brochure_url field and are accessed via direct public links
     let targetPdfUrl: string | null = null
-    let isBrochure = false
     
     if (pdfUrl) {
       // Use the specific PDF URL provided
       targetPdfUrl = pdfUrl
-      
-      // Check if this is a brochure (second item in pdf_url array if multiple, or first if only one)
-      if (area.pdf_url) {
-        const pdfUrls = Array.isArray(area.pdf_url) ? area.pdf_url : 
-                       (typeof area.pdf_url === 'string' ? [area.pdf_url] : [])
-        
-        if (pdfUrls.length > 1) {
-          // If multiple PDFs, brochure is the second one (index 1)
-          isBrochure = pdfUrls[1] === pdfUrl || (pdfUrls[1] && (pdfUrls[1].includes(pdfUrl) || pdfUrl.includes(pdfUrls[1])))
-        } else if (pdfUrls.length === 1) {
-          // If only one PDF, check if it matches (could be brochure or bid doc)
-          // For now, if only one PDF and it's being downloaded, treat as brochure (free)
-          isBrochure = pdfUrls[0] === pdfUrl || (pdfUrls[0] && (pdfUrls[0].includes(pdfUrl) || pdfUrl.includes(pdfUrls[0])))
-        }
-      }
     } else if (area.pdf_url) {
       // pdf_url is now a jsonb array
       if (Array.isArray(area.pdf_url) && area.pdf_url.length > 0) {
         // Use first PDF from array
         targetPdfUrl = area.pdf_url[0]
-        // If only one PDF, it's treated as brochure (free)
-        isBrochure = area.pdf_url.length === 1
       } else if (typeof area.pdf_url === 'string') {
         // Legacy single string format (shouldn't happen after migration)
         targetPdfUrl = area.pdf_url
-        isBrochure = true // Single PDF is brochure
       }
     }
 
@@ -168,8 +158,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'No PDF document available for this area' }, { status: 404 })
     }
 
-    // Only check purchase for bid documents (not brochures)
-    if (!isBrochure) {
+    // All documents in pdf_url array require purchase (they are bid documents, not brochures)
+    // Brochures are handled separately via brochure_url field with direct public links
+    {
       const { data: downloadRecord, error: downloadError } = await supabaseAdmin
         .from('area_downloads')
         .select('id, payment_status')
@@ -186,51 +177,35 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Normalize path - brochures might be in bidding-brochure bucket, bid docs in bidding-blocks
-    const resolvePath = (isBrochureFlag: boolean): { path: string | null, bucket: string } => {
+    // Normalize path for bidding-blocks bucket (bid documents are always in bidding-blocks)
+    const resolvePath = (): { path: string | null, bucket: string } => {
       let path = ''
-      let bucket = 'bidding-blocks' // Default bucket
+      const bucket = 'bidding-blocks' // Bid documents are always in bidding-blocks bucket
       
       if (targetPdfUrl) {
-        // Check if it's from bidding-brochure bucket (public brochures)
-        if (targetPdfUrl.includes('/storage/v1/object/public/bidding-brochure/')) {
-          const parts = targetPdfUrl.split('/storage/v1/object/public/bidding-brochure/')
-          if (parts.length > 1) {
-            path = parts[1]
-            bucket = 'bidding-brochure'
-          }
-        } else if (targetPdfUrl.includes('/storage/v1/object/public/bidding-blocks/')) {
+        // Check if it's from bidding-blocks bucket
+        if (targetPdfUrl.includes('/storage/v1/object/public/bidding-blocks/')) {
           const parts = targetPdfUrl.split('/storage/v1/object/public/bidding-blocks/')
           if (parts.length > 1) path = parts[1]
+        } else if (targetPdfUrl.includes('/storage/v1/object/sign/bidding-blocks/')) {
+          // Signed URL
+          const parts = targetPdfUrl.split('/storage/v1/object/sign/bidding-blocks/')
+          if (parts.length > 1) path = parts[1].split('?')[0] // Remove query params
         } else if (targetPdfUrl.startsWith('bidding-docs/')) {
           path = targetPdfUrl
         } else if (targetPdfUrl.startsWith('bidding-blocks/')) {
           path = targetPdfUrl.replace(/^bidding-blocks\//, '')
-        } else if (targetPdfUrl.startsWith('brochures/')) {
-          path = targetPdfUrl
-          bucket = 'bidding-brochure'
         } else {
-          // If it's a brochure, try bidding-brochure bucket first
-          if (isBrochureFlag) {
-            bucket = 'bidding-brochure'
-            path = `brochures/${targetPdfUrl.split('/').pop()}`
-          } else {
-            path = `bidding-docs/${targetPdfUrl.split('/').pop()}`
-          }
+          // Default: assume it's in bidding-docs folder
+          path = `bidding-docs/${targetPdfUrl.split('/').pop()}`
         }
       }
       
       if (!path && area.pdf_filename) {
         if (area.pdf_filename.startsWith('bidding-blocks/')) {
           path = area.pdf_filename.replace(/^bidding-blocks\//, '')
-        } else if (area.pdf_filename.startsWith('brochures/')) {
-          path = area.pdf_filename
-          bucket = 'bidding-brochure'
         } else {
-          path = isBrochureFlag 
-            ? `brochures/${area.pdf_filename}`
-            : `bidding-docs/${area.pdf_filename}`
-          if (isBrochureFlag) bucket = 'bidding-brochure'
+          path = `bidding-docs/${area.pdf_filename}`
         }
       }
       
@@ -238,22 +213,27 @@ export async function GET(request: NextRequest) {
       return { path: path || null, bucket }
     }
 
-    const { path: normalizedPath, bucket } = resolvePath(isBrochure)
+    const { path: normalizedPath, bucket } = resolvePath()
 
     console.log('Attempting to download file from path:', normalizedPath)
     console.log('Target PDF URL:', targetPdfUrl)
-    console.log('Is brochure:', isBrochure)
     console.log('Bucket:', bucket)
     console.log('pdf_url array:', area.pdf_url)
+    console.log('pdf_filename:', area.pdf_filename)
     
     if (!normalizedPath) {
       return NextResponse.json({ error: 'Could not resolve file path' }, { status: 404 })
     }
     
-    const tryPaths = Array.from(new Set(
-      [normalizedPath, normalizedPath.startsWith(bucket + '/') ? normalizedPath : `${bucket}/${normalizedPath}`]
-        .filter(Boolean)
-    )) as string[]
+    // Since database stores paths as "bidding-docs/filename.pdf", use it directly
+    // Only try alternative paths if the direct path fails
+    const tryPaths = Array.from(new Set([
+      normalizedPath, // Primary: use the path from database directly (e.g., "bidding-docs/file.pdf")
+      normalizedPath.replace(/^bidding-docs\//, ''), // Fallback: try just filename at root (unlikely but possible)
+    ].filter(Boolean))) as string[]
+
+    console.log('Trying paths:', tryPaths)
+    console.log('Bucket:', bucket)
 
     let signedUrl: string | null = null
     let lastError: any = null
@@ -261,21 +241,24 @@ export async function GET(request: NextRequest) {
     const downloadName = getDownloadName(area.name)
 
     for (const pathVariant of tryPaths) {
-      // Remove bucket prefix if present (createSignedUrl needs path without bucket)
-      const cleanPath = pathVariant.startsWith(bucket + '/') 
-        ? pathVariant.replace(new RegExp(`^${bucket}/`), '')
-        : pathVariant
+      console.log(`Attempting to create signed URL for path: "${pathVariant}" in bucket: "${bucket}"`)
       
       const { data: signedUrlData, error: signedUrlError } = await supabaseAdmin.storage
         .from(bucket)
-        .createSignedUrl(cleanPath, 3600, { download: downloadName }) // 1 hour expiry
+        .createSignedUrl(pathVariant, 3600, { download: downloadName }) // 1 hour expiry
 
       if (signedUrlError || !signedUrlData?.signedUrl) {
         lastError = signedUrlError
-        console.error(`Error generating signed URL for ${bucket}:`, signedUrlError, 'path:', cleanPath)
+        console.error(`Error generating signed URL for ${bucket}:`, {
+          error: signedUrlError,
+          message: signedUrlError?.message,
+          path: pathVariant,
+          bucket
+        })
         continue
       }
 
+      console.log(`Successfully generated signed URL for path: "${pathVariant}"`)
       // Force https in case the storage endpoint returns http
       signedUrl = signedUrlData.signedUrl.startsWith('http://')
         ? signedUrlData.signedUrl.replace('http://', 'https://')
@@ -284,13 +267,26 @@ export async function GET(request: NextRequest) {
       }
       
     if (!signedUrl) {
+      const errorMessage = lastError?.message || 'File not found in storage'
       console.error('Failed to generate signed URL. Last error:', lastError)
       console.error('Tried paths:', tryPaths)
-      return NextResponse.json({ error: 'Failed to generate or fetch download URL' }, { status: 500 })
+      console.error('Target PDF URL:', targetPdfUrl)
+      console.error('Normalized path:', normalizedPath)
+      console.error('Area pdf_filename:', area.pdf_filename)
+      console.error('Area ID:', areaId)
+      
+      // Return detailed error for debugging (remove in production if needed)
+      return NextResponse.json({ 
+        error: 'Failed to generate or fetch download URL',
+        details: errorMessage,
+        triedPaths: tryPaths,
+        targetPdfUrl: targetPdfUrl,
+        normalizedPath: normalizedPath
+      }, { status: 500 })
     }
 
-    // Log the download
-    await logDownload(areaId, user.id, area.name)
+    // Log the download (non-blocking)
+    logDownload(areaId, user.id, area.name)
 
     // For better reliability, return the signed URL as JSON
     // The client will fetch it directly, avoiding server-side TLS/network issues
@@ -385,56 +381,85 @@ export async function POST(request: NextRequest) {
       }, { status: 403 })
     }
 
-    // Normalize path (same logic as GET)
-    const resolvePath = (): string | null => {
+    // Normalize path for bidding-blocks bucket (bid documents are always in bidding-blocks)
+    const resolvePath = (): { path: string | null, bucket: string } => {
       let path = ''
-    if (targetPdfUrl) {
+      const bucket = 'bidding-blocks' // Bid documents are always in bidding-blocks bucket
+      
+      if (targetPdfUrl) {
+        // Check if it's from bidding-blocks bucket
         if (targetPdfUrl.includes('/storage/v1/object/public/bidding-blocks/')) {
           const parts = targetPdfUrl.split('/storage/v1/object/public/bidding-blocks/')
           if (parts.length > 1) path = parts[1]
+        } else if (targetPdfUrl.includes('/storage/v1/object/sign/bidding-blocks/')) {
+          // Signed URL
+          const parts = targetPdfUrl.split('/storage/v1/object/sign/bidding-blocks/')
+          if (parts.length > 1) path = parts[1].split('?')[0] // Remove query params
         } else if (targetPdfUrl.startsWith('bidding-docs/')) {
           path = targetPdfUrl
         } else if (targetPdfUrl.startsWith('bidding-blocks/')) {
           path = targetPdfUrl.replace(/^bidding-blocks\//, '')
-      } else {
+        } else {
+          // Default: assume it's in bidding-docs folder
           path = `bidding-docs/${targetPdfUrl.split('/').pop()}`
+        }
       }
-    }
+      
       if (!path && area.pdf_filename) {
-        path = area.pdf_filename.startsWith('bidding-blocks/')
-          ? area.pdf_filename.replace(/^bidding-blocks\//, '')
-          : `bidding-docs/${area.pdf_filename}`
+        if (area.pdf_filename.startsWith('bidding-blocks/')) {
+          path = area.pdf_filename.replace(/^bidding-blocks\//, '')
+        } else {
+          path = `bidding-docs/${area.pdf_filename}`
+        }
       }
-      if (path.startsWith('/')) path = path.replace(/^\/+/, '')
-      return path || null
+      
+      if (path && path.startsWith('/')) path = path.replace(/^\/+/, '')
+      return { path: path || null, bucket }
     }
 
-    const normalizedPath = resolvePath()
+    const { path: normalizedPath, bucket } = resolvePath()
 
     console.log('Attempting to download file from path (POST):', normalizedPath)
     console.log('Target PDF URL:', targetPdfUrl)
+    console.log('Bucket:', bucket)
     console.log('pdf_url array:', area.pdf_url)
     
-    // Generate signed URL and redirect
+    if (!normalizedPath) {
+      return NextResponse.json({ error: 'Could not resolve file path' }, { status: 404 })
+    }
+    
+    // Database stores paths as "bidding-docs/filename.pdf" - use it directly
+    // Only try alternative paths if the direct path fails
+    const tryPaths = Array.from(new Set([
+      normalizedPath, // Primary: use the path from database directly (e.g., "bidding-docs/file.pdf")
+      normalizedPath.replace(/^bidding-docs\//, ''), // Fallback: try just filename at root (unlikely but possible)
+    ].filter(Boolean))) as string[]
+
     let signedUrl: string | null = null
     let lastError: any = null
 
     const downloadName = getDownloadName(area.name)
 
-    for (const pathVariant of Array.from(new Set(
-      [normalizedPath, normalizedPath ? `bidding-blocks/${normalizedPath}` : null]
-        .filter(Boolean)
-    )) as string[]) {
+    for (const pathVariant of tryPaths) {
+      console.log(`POST: Attempting to create signed URL for path: "${pathVariant}" in bucket: "${bucket}"`)
+      
       const { data: signedUrlData, error: signedUrlError } = await supabaseAdmin.storage
-        .from('bidding-blocks')
+        .from(bucket)
         .createSignedUrl(pathVariant, 3600, { download: downloadName })
 
       if (signedUrlError || !signedUrlData?.signedUrl) {
         lastError = signedUrlError
-        console.error('POST: Error generating signed URL for bidding-blocks:', signedUrlError, 'path:', pathVariant)
+        console.error(`POST: Error generating signed URL for ${bucket}:`, {
+          error: signedUrlError,
+          message: signedUrlError?.message,
+          path: pathVariant,
+          bucket
+        })
         continue
       }
 
+      console.log(`POST: Successfully generated signed URL for path: "${pathVariant}"`)
+      // Force https in case the storage endpoint returns http
       signedUrl = signedUrlData.signedUrl.startsWith('http://')
         ? signedUrlData.signedUrl.replace('http://', 'https://')
         : signedUrlData.signedUrl
@@ -442,34 +467,26 @@ export async function POST(request: NextRequest) {
     }
 
     if (!signedUrl) {
-      console.error('POST: Failed to generate download URL', lastError)
+      console.error('POST: Failed to generate signed URL. Last error:', lastError)
+      console.error('POST: Tried paths:', tryPaths)
       return NextResponse.json({ error: 'Failed to generate or fetch download URL' }, { status: 500 })
     }
 
-    // Log the download
-    await logDownload(areaId, user.id, area.name)
+    // Log the download (non-blocking)
+    logDownload(areaId, user.id, area.name)
 
-    // Fetch the file from the signed URL and return it as a blob
-    try {
-      const fileBuffer = await fetchSignedUrlFile(signedUrl)
-      const downloadName = getDownloadName(area.name)
-      
-      return new NextResponse(fileBuffer as any, {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/pdf',
-          'Content-Disposition': `attachment; filename="${downloadName}"`,
-          'Content-Length': fileBuffer.length.toString(),
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        }
-      })
-    } catch (fetchError) {
-      console.error('POST: Error fetching file from signed URL:', fetchError)
-      // Fallback: redirect to signed URL if direct fetch fails
-      return NextResponse.redirect(signedUrl)
-    }
+    // For better reliability, return the signed URL as JSON
+    // The client will fetch it directly, avoiding server-side TLS/network issues
+    return NextResponse.json({ 
+      signedUrl,
+      downloadName,
+      fallback: true 
+    }, { 
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
 
   } catch (error) {
     console.error('Unexpected error in download route:', error)

@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase'
 import { Button } from './ui/button'
 import { 
   Building2, Home, LogOut, User, Menu, X, FolderOpen, FileStack, 
-  ClipboardCheck, Map, MessageSquare, Loader2, ChevronLeft, CreditCard, Send
+  ClipboardCheck, Map as MapIcon, MessageSquare, Loader2, ChevronLeft, CreditCard, Send
 } from 'lucide-react'
 import Image from 'next/image'
 import BiddingPortalNewsTicker from './BiddingPortalNewsTicker'
@@ -137,12 +137,39 @@ export default function BiddingPortalLayout({
         .select('*', { count: 'exact', head: true })
         .eq('status', 'Open')
 
-      // Count purchased
-      const { count: purchasedCount } = await supabase
+      // Count purchased areas available for submission (excluding submitted bids)
+      // Get all purchased area IDs
+      const { data: purchasedData } = await supabase
         .from('area_downloads')
-        .select('*', { count: 'exact', head: true })
+        .select('area_id')
         .eq('user_id', user?.id)
         .eq('payment_status', 'completed')
+
+      let availableForSubmissionCount = 0
+      if (purchasedData && purchasedData.length > 0) {
+        const purchasedAreaIds = purchasedData.map((d: any) => d.area_id)
+        
+        // Get bid applications for these purchased areas
+        const { data: bidApps } = await supabase
+          .from('bid_applications')
+          .select('area_id, status')
+          .eq('user_id', user?.id)
+          .in('area_id', purchasedAreaIds)
+
+        // Create a map of area_id to bid status
+        const areaBidStatusMap: Record<string, string> = {}
+        if (bidApps) {
+          bidApps.forEach((app: any) => {
+            areaBidStatusMap[app.area_id] = app.status
+          })
+        }
+
+        // Count purchased areas where there's no bid app or status is 'draft'
+        availableForSubmissionCount = purchasedAreaIds.filter((areaId: string) => {
+          const bidStatus = areaBidStatusMap[areaId]
+          return !bidStatus || bidStatus === 'draft'
+        }).length
+      }
 
       // Count submitted applications
       const { count: submittedCount } = await supabase
@@ -167,7 +194,7 @@ export default function BiddingPortalLayout({
 
       setCounts({
         openBlocks: openCount || 0,
-        purchased: purchasedCount || 0,
+        purchased: availableForSubmissionCount,
         submitted: submittedCount || 0,
         tickets: ticketsCount || 0,
         payments: paymentsCount || 0
@@ -202,7 +229,7 @@ export default function BiddingPortalLayout({
     { 
       id: 'interactive-map', 
       label: 'Interactive Map', 
-      icon: Map,
+      icon: MapIcon,
       href: '/bidding-portal?tab=interactive-map'
     },
     { 
@@ -327,7 +354,7 @@ export default function BiddingPortalLayout({
               </div>
             )}
             <a
-              href={process.env.NEXT_PUBLIC_MAIN_SITE_URL || 'http://localhost:3000'}
+              href={process.env.NEXT_PUBLIC_MAIN_SITE_URL || 'https://ppisonline.com'}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center space-x-2 lg:space-x-2.5 px-2 lg:px-2.5 py-1.5 lg:py-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"

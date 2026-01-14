@@ -36,7 +36,8 @@ import {
   Plus,
   ChevronRight,
   CreditCard,
-  Receipt
+  Receipt,
+  User
 } from 'lucide-react'
 
 // Dynamically import the map component to avoid SSR issues
@@ -1070,8 +1071,9 @@ function BiddingPortalContent() {
                 <div className="inline-flex items-center rounded-full bg-gray-100 p-1">
                   <button
                     className={`px-4 py-2 text-sm font-medium rounded-full transition-colors ${
-                      openBlocksView === 'open' ? 'bg-white shadow text-teal-700' : 'text-gray-600'
+                      openBlocksView === 'open' ? 'shadow text-white' : 'text-gray-600'
                     }`}
+                    style={openBlocksView === 'open' ? { backgroundColor: '#317070' } : {}}
                     onClick={() => setOpenBlocksView('open')}
                   >
                     Open Blocks ({openBlocks.filter(b => !b.isPurchased).length})
@@ -1144,41 +1146,62 @@ function BiddingPortalContent() {
                             </div>
                           </div>
                           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                            {block.brochure_url && (
-                              <a
-                                href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/bidding-brochure/${block.brochure_url}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center px-4 py-2 border border-teal-200 text-teal-700 hover:bg-teal-50 bg-transparent rounded-lg transition-colors font-medium"
+                            {isPurchased && block.pdf_url && block.pdf_url.length > 0 && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleDownload(block.id, block.pdf_url![0], block.name)}
+                                disabled={downloadingAreas.has(`${block.id}_${block.pdf_url![0]}`)}
+                                className="border-teal-200 text-teal-700 hover:bg-teal-50 font-medium"
                               >
-                                <Download className="w-4 h-4 mr-2" />
-                                Download Brochure
-                              </a>
+                                {downloadingAreas.has(`${block.id}_${block.pdf_url![0]}`) ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    Downloading...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Download className="w-4 h-4 mr-2" />
+                                    Bidding Documents
+                                  </>
+                                )}
+                              </Button>
                             )}
-                            {isPurchased ? (
+                            {block.brochure_url && (
                               <Button
-                                onClick={() => router.push('/bidding-portal?tab=purchased-documents')}
-                                className="!bg-blue-600 hover:!bg-blue-700 !text-white"
+                                size="sm"
+                                variant="outline"
+                                asChild
+                                className="border-teal-200 text-teal-700 hover:bg-teal-50 font-medium"
                               >
-                                <FileCheck className="w-4 h-4 mr-2" />
-                                View Purchased
+                                <a
+                                  href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/bidding-brochure/${block.brochure_url}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <Download className="w-4 h-4 mr-2" />
+                                  Download Brochure
+                                </a>
                               </Button>
-                            ) : isInCart(block.id) ? (
-                              <Button
-                                disabled
-                                className="!bg-gray-400 !text-white cursor-not-allowed"
-                              >
-                                <ShoppingCart className="w-4 h-4 mr-2" />
-                                In Cart
-                              </Button>
-                            ) : (
-                              <Button
-                                onClick={() => handleAddToCart(block)}
-                                className="!bg-teal-600 hover:!bg-teal-700 !text-white"
-                              >
-                                <ShoppingCart className="w-4 h-4 mr-2" />
-                                Purchase ({formatPrice(block.price)})
-                              </Button>
+                            )}
+                            {!isPurchased && (
+                              isInCart(block.id) ? (
+                                <Button
+                                  disabled
+                                  className="!bg-gray-400 !text-white cursor-not-allowed"
+                                >
+                                  <ShoppingCart className="w-4 h-4 mr-2" />
+                                  In Cart
+                                </Button>
+                              ) : (
+                                <Button
+                                  onClick={() => handleAddToCart(block)}
+                                  className="!bg-teal-600 hover:!bg-teal-700 !text-white"
+                                >
+                                  <ShoppingCart className="w-4 h-4 mr-2" />
+                                  Purchase ({formatPrice(block.price)})
+                                </Button>
+                              )
                             )}
                           </div>
                         </div>
@@ -1225,7 +1248,15 @@ function BiddingPortalContent() {
             </Card>
           ) : (
             <div className="grid gap-4">
-              {purchasedAreas.map((area) => {
+              {purchasedAreas
+                .filter((area) => {
+                  // Only show areas where there's no bid application or status is 'draft'
+                  // Exclude submitted, under_review, and approved bids
+                  const hasBidApp = area.bid_application
+                  const bidStatus = hasBidApp?.status
+                  return !hasBidApp || bidStatus === 'draft'
+                })
+                .map((area) => {
                 const hasBidApp = area.bid_application
                 const bidStatus = hasBidApp?.status
                 const canApply = !hasBidApp || bidStatus === 'draft'
@@ -1252,7 +1283,7 @@ function BiddingPortalContent() {
                                   variant="outline"
                                   onClick={() => handleDownload(area.area_id, area.pdf_url![0], area.area_name)}
                                   disabled={downloadingAreas.has(`${area.area_id}_${area.pdf_url![0]}`)}
-                                  className="border-teal-200 text-teal-700 hover:bg-teal-50"
+                                  className="border-teal-200 text-teal-700 hover:bg-teal-50 font-medium"
                                 >
                                   {downloadingAreas.has(`${area.area_id}_${area.pdf_url![0]}`) ? (
                                     <>
@@ -1261,22 +1292,28 @@ function BiddingPortalContent() {
                                     </>
                                   ) : (
                                     <>
-                                      <FileText className="w-4 h-4 mr-2" />
+                                      <Download className="w-4 h-4 mr-2" />
                                       Bidding Documents
                                     </>
                                   )}
                                 </Button>
                               )}
                               {area.brochure_url && (
-                                <a
-                                  href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/bidding-brochure/${area.brochure_url}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center px-3 py-1.5 border border-teal-200 text-teal-700 hover:bg-teal-50 bg-transparent rounded-lg transition-colors text-sm font-medium"
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  asChild
+                                  className="border-teal-200 text-teal-700 hover:bg-teal-50 font-medium"
                                 >
-                                  <Download className="w-4 h-4 mr-2" />
-                                  Download Brochure
-                                </a>
+                                  <a
+                                    href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/bidding-brochure/${area.brochure_url}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <Download className="w-4 h-4 mr-2" />
+                                    Download Brochure
+                                  </a>
+                                </Button>
                               )}
                             </div>
                           </div>
@@ -1294,7 +1331,9 @@ function BiddingPortalContent() {
                           ) : (
                             <div className="text-center p-3 bg-gray-50 rounded-lg">
                               <CheckCircle className="w-6 h-6 text-emerald-500 mx-auto mb-1" />
-                              <p className="text-sm font-medium text-gray-700 capitalize">{bidStatus?.replace('_', ' ')}</p>
+                              <p className="text-sm font-medium text-gray-700">
+                                {bidStatus === 'submitted' ? 'Bid Submitted' : bidStatus?.replace('_', ' ').split(' ').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                              </p>
                             </div>
                           )}
                         </div>
@@ -1328,53 +1367,46 @@ function BiddingPortalContent() {
           ) : (
             <div className="grid gap-4">
               {submittedApps.map((app) => (
-                <Card key={app.id} className="hover:shadow-md transition-shadow">
+                <Card key={app.id} className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-emerald-500">
                   <CardContent className="p-4 lg:p-5">
-                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                      <div className="flex items-start space-x-4">
-                        <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center">
-                          <CheckCircle className="w-6 h-6 text-emerald-600" />
+                    <div className="flex items-start space-x-4">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center flex-shrink-0 border border-emerald-200">
+                        <CheckCircle className="w-6 h-6 text-emerald-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center flex-wrap gap-2 mb-1">
+                          <h3 className="text-lg font-semibold text-gray-900">{app.area_name}</h3>
+                          {getBidStatusBadge(app.status)}
                         </div>
-                        <div>
-                          <div className="flex items-center space-x-3 mb-1">
-                            <h3 className="text-lg font-semibold text-gray-900">{app.area_name}</h3>
-                            {getBidStatusBadge(app.status)}
+                        <p className="text-sm text-gray-500 mb-3">{app.area_code}</p>
+                        
+                        {/* Details Grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          <div className="flex items-start space-x-2 p-2.5 bg-gray-50 rounded-lg border border-gray-100">
+                            <User className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-medium text-gray-500 mb-0.5">Applicant</p>
+                              <p className="text-sm font-semibold text-gray-900 truncate">{app.primary_applicant_name}</p>
+                            </div>
                           </div>
-                          <p className="text-sm text-gray-500">{app.area_code}</p>
-                          <div className="mt-3 grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <p className="text-gray-500">Applicant</p>
-                              <p className="font-medium">{app.primary_applicant_name}</p>
+                          <div className="flex items-start space-x-2 p-2.5 bg-gray-50 rounded-lg border border-gray-100">
+                            <Clock className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-medium text-gray-500 mb-0.5">Submitted</p>
+                              <p className="text-sm font-semibold text-gray-900">{formatDate(app.submitted_at)}</p>
                             </div>
-                            <div>
-                              <p className="text-gray-500">Submitted</p>
-                              <p className="font-medium">{formatDate(app.submitted_at)}</p>
-                            </div>
-                            {app.work_units && (
-                              <div>
-                                <p className="text-gray-500">Work Units</p>
-                                <p className="font-medium text-emerald-700">{app.work_units}</p>
+                          </div>
+                          {app.work_units && (
+                            <div className="flex items-start space-x-2 p-2.5 bg-emerald-50 rounded-lg border border-emerald-100">
+                              <Trophy className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-medium text-emerald-700 mb-0.5">Work Units</p>
+                                <p className="text-sm font-bold text-emerald-700">{app.work_units}</p>
                               </div>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </div>
                       </div>
-                      
-                      {app.work_units ? (
-                        <div className="flex items-center space-x-2 px-4 py-2 bg-emerald-50 rounded-lg">
-                          <Trophy className="w-5 h-5 text-emerald-600" />
-                          <span className="font-semibold text-emerald-700">Complete</span>
-                        </div>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          onClick={() => router.push(`/bid-submission/${app.area_id}`)}
-                          className="border-teal-200 text-teal-700 hover:bg-teal-50"
-                        >
-                          <FileText className="w-4 h-4 mr-2" />
-                          Continue Submission
-                        </Button>
-                      )}
                     </div>
                   </CardContent>
                 </Card>
