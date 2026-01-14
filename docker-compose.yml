@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  ppis-bidding-portal:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ppis-bidding-portal
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL}
+      - NEXT_PUBLIC_MAIN_SITE_URL=${NEXT_PUBLIC_MAIN_SITE_URL}
+      - ALLOW_INSECURE_TLS=${ALLOW_INSECURE_TLS:-false}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/bidding-portal/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
