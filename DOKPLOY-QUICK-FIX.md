@@ -1,6 +1,11 @@
-# Quick Fix for Dokploy DNS Error
+# Quick Fix for Dokploy Errors
 
-## Immediate Solution
+## Common Errors
+
+- **DNS Timeout Error**: See solutions below
+- **"supabaseUrl is required" Error**: See [DOKPLOY-ENV-FIX.md](./DOKPLOY-ENV-FIX.md)
+
+## DNS Timeout Error - Immediate Solution
 
 If you're getting the DNS timeout error in Dokploy, try these in order:
 

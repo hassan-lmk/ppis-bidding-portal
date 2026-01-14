@@ -16,13 +16,29 @@ RUN npm ci
 FROM ${REGISTRY}/library/node:${NODE_VERSION} AS builder
 WORKDIR /app
 
+# Accept build arguments for Next.js public environment variables
+# These are required at build time for Next.js to embed them in the bundle
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ARG NEXT_PUBLIC_SITE_URL
+ARG NEXT_PUBLIC_MAIN_SITE_URL
+ARG SUPABASE_SERVICE_ROLE_KEY
+ARG ALLOW_INSECURE_TLS
+
+# Set environment variables for build
+# Next.js requires NEXT_PUBLIC_* variables to be available at build time
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
+ENV NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+ENV NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL}
+ENV NEXT_PUBLIC_MAIN_SITE_URL=${NEXT_PUBLIC_MAIN_SITE_URL}
+ENV SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+ENV ALLOW_INSECURE_TLS=${ALLOW_INSECURE_TLS}
+
 # Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-
-# Set environment variables for build
-ENV NEXT_TELEMETRY_DISABLED=1
-ENV NODE_ENV=production
 
 # Build the application
 RUN npm run build

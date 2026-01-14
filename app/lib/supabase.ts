@@ -1,11 +1,19 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://ppisapi.lmkr.com/'
+// Get Supabase URL - handle empty strings and undefined
+// Use fallback only if env var is not set or is empty/whitespace
+const supabaseUrlRaw = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseUrl = (supabaseUrlRaw && supabaseUrlRaw.trim()) || 'https://ppisapi.lmkr.com/'
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-if (!supabaseAnonKey) {
-  throw new Error('Missing env NEXT_PUBLIC_SUPABASE_ANON_KEY')
+if (!supabaseAnonKey || !supabaseAnonKey.trim()) {
+  throw new Error('Missing env NEXT_PUBLIC_SUPABASE_ANON_KEY. Please set this environment variable.')
+}
+
+// Validate URL format (basic check)
+if (!supabaseUrl || supabaseUrl.trim() === '' || (!supabaseUrl.startsWith('http://') && !supabaseUrl.startsWith('https://'))) {
+  throw new Error(`Invalid NEXT_PUBLIC_SUPABASE_URL: "${supabaseUrl}". Must be a valid HTTP/HTTPS URL.`)
 }
 
 // Custom fetch for server-side with configurable TLS verification

@@ -1,6 +1,11 @@
 # Dokploy Deployment Guide
 
-This guide helps resolve DNS and network issues when deploying to Dokploy.
+This guide helps resolve common issues when deploying to Dokploy.
+
+## Common Issues
+
+- **DNS Resolution Errors**: See solutions below
+- **Environment Variable Errors**: See [DOKPLOY-ENV-FIX.md](./DOKPLOY-ENV-FIX.md) for "supabaseUrl is required" errors
 
 ## Problem
 
