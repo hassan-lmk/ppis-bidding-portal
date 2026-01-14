@@ -67,6 +67,7 @@ interface OpenBlock {
   price: number
   bid_submission_deadline: string | null
   pdf_url: string[] | null
+  brochure_url: string | null
   isPurchased: boolean
 }
 
@@ -74,6 +75,7 @@ interface PurchasedArea {
   id: string
   area_id: string
   area_name: string
+  brochure_url?: string | null
   area_code: string
   zone_name: string
   block_name: string
@@ -347,7 +349,7 @@ function BiddingPortalContent() {
     const { data: areasData } = await supabase
       .from('areas')
       .select(`
-        id, name, code, status, price, bid_submission_deadline, pdf_url, zone_id,
+        id, name, code, status, price, bid_submission_deadline, pdf_url, brochure_url, zone_id,
         zones!inner(
           name,
           blocks!inner(name, type)
@@ -378,6 +380,7 @@ function BiddingPortalContent() {
       price: area.price || 0,
       bid_submission_deadline: area.bid_submission_deadline,
       pdf_url: Array.isArray(area.pdf_url) ? area.pdf_url : area.pdf_url ? [area.pdf_url] : null,
+      brochure_url: area.brochure_url,
       isPurchased: purchasedAreaIds.includes(area.id)
     }))
 
@@ -394,7 +397,7 @@ function BiddingPortalContent() {
         downloaded_at,
         payment_status,
         areas!inner(
-          id, name, code, pdf_url, status, bid_submission_deadline, work_program_opens_at,
+          id, name, code, pdf_url, brochure_url, status, bid_submission_deadline, work_program_opens_at,
           zones!inner(
             name,
             blocks!inner(name, type)
@@ -434,6 +437,7 @@ function BiddingPortalContent() {
         block_type: download.areas.zones.blocks.type,
         downloaded_at: download.downloaded_at,
         pdf_url: Array.isArray(download.areas.pdf_url) ? download.areas.pdf_url : download.areas.pdf_url ? [download.areas.pdf_url] : null,
+        brochure_url: download.areas.brochure_url,
         bid_submission_deadline: download.areas.bid_submission_deadline,
         work_program_opens_at: download.areas.work_program_opens_at,
         bid_application: bidApp ? {
@@ -1140,20 +1144,16 @@ function BiddingPortalContent() {
                             </div>
                           </div>
                           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                            {block.pdf_url && block.pdf_url.length > 0 && (
-                              <Button
-                                variant="outline"
-                                onClick={() => handleDownload(block.id, block.pdf_url![0], block.name)}
-                                disabled={downloadingAreas.has(`${block.id}_${block.pdf_url![0]}`)}
-                                className={isPurchased ? '!border-blue-200 !text-blue-700 hover:!bg-blue-50 bg-transparent' : '!border-teal-200 !text-teal-700 hover:!bg-teal-50 bg-transparent'}
+                            {block.brochure_url && (
+                              <a
+                                href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/bidding-brochure/${block.brochure_url}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center px-4 py-2 border border-teal-200 text-teal-700 hover:bg-teal-50 bg-transparent rounded-lg transition-colors font-medium"
                               >
-                                {downloadingAreas.has(`${block.id}_${block.pdf_url![0]}`) ? (
-                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                ) : (
-                                  <Download className="w-4 h-4 mr-2" />
-                                )}
+                                <Download className="w-4 h-4 mr-2" />
                                 Download Brochure
-                              </Button>
+                              </a>
                             )}
                             {isPurchased ? (
                               <Button
@@ -1245,52 +1245,40 @@ function BiddingPortalContent() {
                             </div>
                             <p className="text-sm text-gray-500">{area.area_code}</p>
                             
-                            {area.pdf_url && area.pdf_url.length > 0 && (() => {
-                              const pdfUrls = area.pdf_url!
-                              const brochureUrl = pdfUrls.length > 1 ? pdfUrls[1] : pdfUrls[0]
-                              return (
-                                <div className="mt-4 flex flex-wrap gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => handleDownload(area.area_id, pdfUrls[0], area.area_name)}
-                                    disabled={downloadingAreas.has(`${area.area_id}_${pdfUrls[0]}`)}
-                                    className="border-teal-200 text-teal-700 hover:bg-teal-50"
-                                  >
-                                    {downloadingAreas.has(`${area.area_id}_${pdfUrls[0]}`) ? (
-                                      <>
-                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                        Downloading...
-                                      </>
-                                    ) : (
-                                      <>
-                                        <FileText className="w-4 h-4 mr-2" />
-                                        Bidding Documents
-                                      </>
-                                    )}
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => handleDownload(area.area_id, brochureUrl, area.area_name)}
-                                    disabled={downloadingAreas.has(`${area.area_id}_${brochureUrl}`)}
-                                    className="border-teal-200 text-teal-700 hover:bg-teal-50"
-                                  >
-                                    {downloadingAreas.has(`${area.area_id}_${brochureUrl}`) ? (
-                                      <>
-                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                        Downloading...
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Download className="w-4 h-4 mr-2" />
-                                        Download Brochure
-                                      </>
-                                    )}
-                                  </Button>
-                                </div>
-                              )
-                            })()}
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              {area.pdf_url && area.pdf_url.length > 0 && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleDownload(area.area_id, area.pdf_url![0], area.area_name)}
+                                  disabled={downloadingAreas.has(`${area.area_id}_${area.pdf_url![0]}`)}
+                                  className="border-teal-200 text-teal-700 hover:bg-teal-50"
+                                >
+                                  {downloadingAreas.has(`${area.area_id}_${area.pdf_url![0]}`) ? (
+                                    <>
+                                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                      Downloading...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <FileText className="w-4 h-4 mr-2" />
+                                      Bidding Documents
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+                              {area.brochure_url && (
+                                <a
+                                  href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/bidding-brochure/${area.brochure_url}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center px-3 py-1.5 border border-teal-200 text-teal-700 hover:bg-teal-50 bg-transparent rounded-lg transition-colors text-sm font-medium"
+                                >
+                                  <Download className="w-4 h-4 mr-2" />
+                                  Download Brochure
+                                </a>
+                              )}
+                            </div>
                           </div>
                         </div>
                         

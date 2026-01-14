@@ -472,6 +472,20 @@ async function authorizedDownload(url: string): Promise<Blob> {
     throw new Error(error.error || 'Failed to download document')
   }
 
+  // Check if response is a JSON with signedUrl (fallback mode)
+  const contentType = response.headers.get('content-type')
+  if (contentType?.includes('application/json')) {
+    const data = await response.json()
+    if (data.signedUrl) {
+      // Fetch from the signed URL directly
+      const fileResponse = await fetch(data.signedUrl)
+      if (!fileResponse.ok) {
+        throw new Error('Failed to download from signed URL')
+      }
+      return fileResponse.blob()
+    }
+  }
+
   return response.blob()
 }
 

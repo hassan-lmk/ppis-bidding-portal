@@ -946,6 +946,117 @@ ${STANDARD_TEXT_FOOTER}
   }
 }
 
+// Template for bid application submission confirmation email
+export function getBidApplicationSubmissionTemplate(
+  userName: string,
+  applicationId: string,
+  areaName: string,
+  areaCode: string,
+  submissionType: string,
+  submittedAt: string
+) {
+  const submissionDate = new Date(submittedAt).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+  
+  return {
+    subject: 'Bid Application Submitted Successfully - PPIS',
+    html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bid Application Submitted</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4;">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f4f4f4;">
+    <tr>
+      <td style="padding: 40px 20px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+          ${getStandardEmailHeader('Application Submitted')}
+          
+          <!-- Content -->
+          <tr>
+            <td style="padding: 40px 30px;">
+              <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #333333;">
+                Dear ${userName},
+              </p>
+              
+              <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #333333;">
+                Thank you for submitting your bid application! We have successfully received your application and it is now under review.
+              </p>
+              
+              <div style="background-color: #e6f7f5; border-left: 4px solid #2CBCA6; padding: 20px; margin: 0 0 30px;">
+                <p style="margin: 0 0 10px; font-size: 15px; font-weight: 600; color: #333333;">
+                  Application Details:
+                </p>
+                <p style="margin: 0 0 5px; font-size: 14px; line-height: 1.6; color: #666666;">
+                  <strong>Application ID:</strong> ${applicationId}
+                </p>
+                <p style="margin: 0 0 5px; font-size: 14px; line-height: 1.6; color: #666666;">
+                  <strong>Area:</strong> ${areaName}${areaCode ? ` (${areaCode})` : ''}
+                </p>
+                <p style="margin: 0 0 5px; font-size: 14px; line-height: 1.6; color: #666666;">
+                  <strong>Submission Type:</strong> ${submissionType === 'consortium' ? 'Consortium/Joint Venture' : 'Single Company'}
+                </p>
+                <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #666666;">
+                  <strong>Submitted On:</strong> ${submissionDate}
+                </p>
+              </div>
+              
+              <p style="margin: 30px 0 10px; font-size: 16px; line-height: 1.6; color: #333333;">
+                <strong>Important:</strong> Please keep this email for your records. Your application ID is ${applicationId}.
+              </p>
+              
+              <p style="margin: 0 0 10px; font-size: 16px; line-height: 1.6; color: #333333;">
+                If you have any questions about your application, please don't hesitate to contact our support team.
+              </p>
+              
+              <p style="margin: 0; font-size: 16px; line-height: 1.6; color: #333333;">
+                Best regards,<br>
+                <strong>The PPIS Team</strong>
+              </p>
+            </td>
+          </tr>
+          ${getStandardEmailFooter()}
+          
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `,
+    text: `
+Bid Application Submitted Successfully - PPIS
+
+Dear ${userName},
+
+Thank you for submitting your bid application! We have successfully received your application and it is now under review.
+
+Application Details:
+- Application ID: ${applicationId}
+- Area: ${areaName}${areaCode ? ` (${areaCode})` : ''}
+- Submission Type: ${submissionType === 'consortium' ? 'Consortium/Joint Venture' : 'Single Company'}
+- Submitted On: ${submissionDate}
+
+Important: Please keep this email for your records. Your application ID is ${applicationId}.
+
+If you have any questions about your application, please don't hesitate to contact our support team.
+
+Best regards,
+The PPIS Team
+
+${STANDARD_TEXT_FOOTER}
+    `
+  }
+}
+
 // Template for work unit decryption code email
 export function getWorkUnitDecryptionCodeTemplate(reviewerEmail: string, code: string) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://ppisonline.com'

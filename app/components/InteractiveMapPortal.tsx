@@ -134,8 +134,8 @@ export default function InteractiveMapPortal({ openBlocksOnly = true }: Interact
 
     mapInstanceRef.current = map
 
-    // Dark map tiles (CartoDB Dark Matter)
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    // White/light map tiles (CartoDB Positron)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; OpenStreetMap &copy; CARTO',
       subdomains: 'abcd',
       maxZoom: 20
@@ -241,14 +241,14 @@ export default function InteractiveMapPortal({ openBlocksOnly = true }: Interact
       }
     }
 
-    // Add province outlines with dark theme styling
+    // Add province outlines with light theme styling
     const provinceLayer = L.geoJSON(provincesData, {
       style: () => ({
         fillColor: 'transparent',
         fillOpacity: 0,
-        color: '#94a3b8', // Light gray for dark theme
+        color: '#64748b', // Darker gray for light theme
         weight: 2,
-        opacity: 0.6,
+        opacity: 0.8,
         dashArray: '5, 5',
         interactive: false // Make provinces non-interactive
       }),
@@ -294,39 +294,39 @@ export default function InteractiveMapPortal({ openBlocksOnly = true }: Interact
 
   if (loading) {
     return (
-      <div className="h-[500px] bg-gray-900 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-teal-400" />
+      <div className="h-[700px] bg-gray-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-teal-600" />
       </div>
     )
   }
 
   return (
-    <div className="relative h-[500px]">
+    <div className="relative h-[700px]">
       {/* Map Container */}
       <div ref={mapRef} className="h-full w-full rounded-xl" />
 
       {/* Legend */}
-      <div className="absolute top-4 left-4 bg-gray-900/90 backdrop-blur-sm rounded-lg shadow-lg p-3 z-[1000] border border-gray-700">
-        <p className="text-xs font-semibold text-gray-200 mb-2">Legend</p>
+      <div className="absolute top-4 left-4 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-3 z-[1000] border border-gray-200">
+        <p className="text-xs font-semibold text-gray-800 mb-2">Legend</p>
         <div className="space-y-1">
           <div className="flex items-center space-x-2">
             <div className="w-4 h-4 rounded bg-emerald-500/40 border-2 border-emerald-500" />
-            <span className="text-xs text-gray-300">Open for Bidding</span>
+            <span className="text-xs text-gray-700">Open for Bidding</span>
           </div>
           <div className="flex items-center space-x-2">
             <div className="w-4 h-4 rounded bg-blue-500/40 border-2 border-blue-500" />
-            <span className="text-xs text-gray-300">Purchased</span>
+            <span className="text-xs text-gray-700">Purchased</span>
           </div>
           <div className="flex items-center space-x-2">
             <div className="w-4 h-4 rounded bg-amber-500/70 border-2 border-amber-500" />
-            <span className="text-xs text-gray-300">Selected</span>
+            <span className="text-xs text-gray-700">Selected</span>
           </div>
         </div>
       </div>
 
       {/* Block Count */}
-      <div className="absolute top-4 right-4 bg-gray-900/90 backdrop-blur-sm rounded-lg shadow-lg px-4 py-2 z-[1000] border border-gray-700">
-        <p className="text-sm font-semibold text-gray-200">{areas.length} Open Blocks</p>
+      <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg px-4 py-2 z-[1000] border border-gray-200">
+        <p className="text-sm font-semibold text-gray-800">{areas.length} Open Blocks</p>
       </div>
 
       {/* Selected Area Panel */}
@@ -402,33 +402,34 @@ export default function InteractiveMapPortal({ openBlocksOnly = true }: Interact
       {/* Custom Tooltip Style */}
       <style jsx global>{`
         .leaflet-tooltip-custom {
-          background: rgba(17, 24, 39, 0.95);
-          color: #f3f4f6;
-          border: 1px solid rgba(75, 85, 99, 0.5);
-          box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+          background: rgba(255, 255, 255, 0.95);
+          color: #1f2937;
+          border: 1px solid rgba(229, 231, 235, 0.8);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
           border-radius: 6px;
           padding: 6px 10px;
           font-size: 12px;
           font-weight: 500;
         }
         .leaflet-tooltip-custom::before {
-          border-top-color: rgba(17, 24, 39, 0.95);
+          border-top-color: rgba(255, 255, 255, 0.95);
         }
         .leaflet-container {
-          background: #111827 !important;
+          background: #f9fafb !important;
         }
         .leaflet-control-zoom a {
-          background-color: rgba(17, 24, 39, 0.9) !important;
-          color: #f3f4f6 !important;
-          border-color: rgba(75, 85, 99, 0.5) !important;
+          background-color: rgba(255, 255, 255, 0.95) !important;
+          color: #374151 !important;
+          border-color: rgba(229, 231, 235, 0.8) !important;
         }
         .leaflet-control-zoom a:hover {
-          background-color: rgba(31, 41, 55, 0.9) !important;
+          background-color: rgba(249, 250, 251, 0.95) !important;
+          color: #111827 !important;
         }
         .leaflet-control-scale-line {
-          background: rgba(17, 24, 39, 0.9) !important;
-          color: #f3f4f6 !important;
-          border-color: rgba(75, 85, 99, 0.5) !important;
+          background: rgba(255, 255, 255, 0.95) !important;
+          color: #374151 !important;
+          border-color: rgba(229, 231, 235, 0.8) !important;
         }
         .leaflet-interactive {
           outline: none !important;
