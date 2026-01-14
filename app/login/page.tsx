@@ -142,7 +142,7 @@ function LoginContent() {
             </button>
           </form>
 
-          <div className="text-center pt-4 border-t border-gray-200">
+          <div className="text-center pt-4 border-t border-gray-200 space-y-3">
             <p className="text-sm text-gray-600">
               Already logged in on the main site?{' '}
               <button
@@ -154,6 +154,17 @@ function LoginContent() {
               >
                 Refresh Session
               </button>
+            </p>
+            <p className="text-sm text-gray-600">
+              Don&apos;t have an account?{' '}
+              <a
+                href="https://ppisonline.com/signup"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-teal-600 hover:text-teal-700 font-medium"
+              >
+                Sign Up
+              </a>
             </p>
           </div>
         </div>
