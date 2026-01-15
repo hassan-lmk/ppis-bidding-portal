@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '../../_supabaseAdmin'
+import { supabaseAdmin } from '../../../lib/supabase'
 import { 
   encryptWorkUnits,
   getMasterKey

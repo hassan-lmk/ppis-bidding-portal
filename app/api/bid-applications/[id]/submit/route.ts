@@ -82,11 +82,26 @@ export async function POST(
       }, { status: 400 })
     }
 
-    // Check deadline
+    // Check deadline from application
     if (app.deadline) {
       const deadline = new Date(app.deadline)
       if (deadline < new Date()) {
         return NextResponse.json({ error: 'Submission deadline has passed' }, { status: 403 })
+      }
+    }
+
+    // Check bid submission closing date from bid_opening_settings
+    const { data: settings, error: settingsError } = await (supabaseAdmin as any)
+      .from('bid_opening_settings')
+      .select('bid_submission_closing_date')
+      .maybeSingle()
+
+    if (!settingsError && settings?.bid_submission_closing_date) {
+      const closingDate = new Date(settings.bid_submission_closing_date)
+      if (closingDate < new Date()) {
+        return NextResponse.json({ 
+          error: 'Bid submission deadline has passed. No further submissions are accepted.' 
+        }, { status: 403 })
       }
     }
 

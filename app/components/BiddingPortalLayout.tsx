@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import Image from 'next/image'
 import BiddingPortalNewsTicker from './BiddingPortalNewsTicker'
+import OnboardingGuard from './OnboardingGuard'
 
 export type PortalTab = 
   | 'opened-bidding' 
@@ -434,7 +435,9 @@ export default function BiddingPortalLayout({
 
         {/* Content Area */}
         <div className="p-4 lg:p-6 w-full max-w-full overflow-x-hidden">
-          {children}
+          <OnboardingGuard>
+            {children}
+          </OnboardingGuard>
         </div>
       </main>
     </div>

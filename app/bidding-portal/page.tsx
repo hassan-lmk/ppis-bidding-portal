@@ -172,6 +172,7 @@ function BiddingPortalContent() {
   const [downloadingReceipts, setDownloadingReceipts] = useState<Set<string>>(new Set())
   const [now, setNow] = useState(new Date())
   const [portalEnabled, setPortalEnabled] = useState<boolean | null>(null)
+  const [bidSubmissionClosingDate, setBidSubmissionClosingDate] = useState<Date | null>(null)
   
   // Track which tabs have been loaded to avoid refetching
   const [loadedTabs, setLoadedTabs] = useState<Set<PortalTab>>(new Set())
@@ -250,6 +251,37 @@ function BiddingPortalContent() {
     const timer = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(timer)
   }, [])
+
+  // Fetch bid submission closing date
+  useEffect(() => {
+    let isMounted = true
+    
+    const fetchClosingDate = async () => {
+      if (!user) return
+      
+      try {
+        const token = await getAuthToken()
+        const response = await fetch('/api/bidding-portal/closing-date', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          if (isMounted && data.bid_submission_closing_date) {
+            setBidSubmissionClosingDate(new Date(data.bid_submission_closing_date))
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching closing date:', err)
+      }
+    }
+    
+    fetchClosingDate()
+    
+    return () => {
+      isMounted = false
+    }
+  }, [user])
 
   // Check if bidding portal is enabled - using cached status
   useEffect(() => {
@@ -1261,6 +1293,11 @@ function BiddingPortalContent() {
                 const bidStatus = hasBidApp?.status
                 const canApply = !hasBidApp || bidStatus === 'draft'
                 
+                // Check if submission is closed based on bid_submission_closing_date
+                const isSubmissionClosed = bidSubmissionClosingDate 
+                  ? new Date() > bidSubmissionClosingDate 
+                  : false
+                
                   return (
                     <Card key={area.id} className="hover:shadow-md transition-shadow">
                       <CardContent className="p-4 lg:p-5">
@@ -1321,13 +1358,23 @@ function BiddingPortalContent() {
                         
                         <div className="lg:w-48">
                           {canApply ? (
-                            <Button
-                              onClick={() => router.push(`/bid-submission/${area.area_id}`)}
-                              className="bg-teal-600 hover:bg-teal-700 text-white w-full"
-                            >
-                              <Send className="w-4 h-4 mr-2" />
-                              {bidStatus === 'draft' ? 'Resume Application' : 'Submit Bid Application'}
-                            </Button>
+                            isSubmissionClosed ? (
+                              <Button
+                                disabled
+                                className="bg-gray-400 hover:bg-gray-400 text-white w-full cursor-not-allowed"
+                              >
+                                <Lock className="w-4 h-4 mr-2" />
+                                Bid Submission Closed
+                              </Button>
+                            ) : (
+                              <Button
+                                onClick={() => router.push(`/bid-submission/${area.area_id}`)}
+                                className="bg-teal-600 hover:bg-teal-700 text-white w-full"
+                              >
+                                <Send className="w-4 h-4 mr-2" />
+                                {bidStatus === 'draft' ? 'Resume Application' : 'Submit Bid Application'}
+                              </Button>
+                            )
                           ) : (
                             <div className="text-center p-3 bg-gray-50 rounded-lg">
                               <CheckCircle className="w-6 h-6 text-emerald-500 mx-auto mb-1" />

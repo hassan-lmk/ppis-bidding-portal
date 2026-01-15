@@ -49,13 +49,11 @@ function LoginContent() {
   }
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-teal-50 to-teal-100">
-      {/* Background Pattern */}
-      <div className="absolute inset-0 opacity-10">
-        <div className="absolute inset-0" style={{
-          backgroundImage: 'radial-gradient(circle at 2px 2px, #14b8a6 1px, transparent 0)',
-          backgroundSize: '40px 40px'
-        }} />
+    <div className="relative min-h-screen flex items-center justify-center py-12 md:py-16">
+      {/* Background Image */}
+      <div className="absolute inset-0 w-full h-full z-0">
+        <img src="/images/Banner-2.webp" alt="Banner" className="w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-black/60" />
       </div>
 
       {/* Form */}
@@ -65,7 +63,7 @@ function LoginContent() {
           <div className="text-center mb-6">
             <div className="flex justify-center mb-4">
               <Image
-                src="/images/Logo-white.svg"
+                src="/images/PPIS-logo-bg.png"
                 alt="PPIS Logo"
                 width={150}
                 height={50}

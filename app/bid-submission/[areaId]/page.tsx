@@ -224,6 +224,7 @@ export default function BidSubmissionPage({
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [portalEnabled, setPortalEnabled] = useState<boolean | null>(null)
+  const [bidSubmissionClosingDate, setBidSubmissionClosingDate] = useState<Date | null>(null)
   
   const [application, setApplication] = useState<BidApplication | null>(null)
   const [areaDetails, setAreaDetails] = useState<any>(null)
@@ -519,6 +520,32 @@ export default function BidSubmissionPage({
           setLoading(false)
           return
         }
+      }
+
+      // Fetch and check bid submission closing date
+      try {
+        const closingDateResponse = await fetch('/api/bidding-portal/closing-date', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+        
+        if (closingDateResponse.ok) {
+          const closingDateData = await closingDateResponse.json()
+          if (closingDateData.bid_submission_closing_date) {
+            const closingDate = new Date(closingDateData.bid_submission_closing_date)
+            setBidSubmissionClosingDate(closingDate)
+            
+            if (closingDate < new Date()) {
+              setError('Bid submission deadline has passed. No further submissions are accepted.')
+              setLoading(false)
+              return
+            }
+          }
+        }
+      } catch (closingDateError) {
+        console.error('Error fetching closing date:', closingDateError)
+        // Don't block the page if we can't fetch the closing date, but log it
       }
 
       // Check if user has purchased this area
@@ -1094,6 +1121,12 @@ export default function BidSubmissionPage({
   // Submit application
   const submitApplication = async () => {
     if (!application) return
+    
+    // Check closing date before allowing submission
+    if (bidSubmissionClosingDate && new Date() > bidSubmissionClosingDate) {
+      setError('Bid submission deadline has passed. No further submissions are accepted.')
+      return
+    }
     
     if (!confirm('Are you sure you want to submit? You will not be able to make changes after submission.')) {
       return
@@ -2832,7 +2865,7 @@ export default function BidSubmissionPage({
                      </li>
                      <li className="flex items-center gap-2">
                        <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
-                       Maximum file size: 100MB per document
+                       Maximum file size: 50MB per document
                      </li>
                      <li className="flex items-center gap-2">
                        <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>

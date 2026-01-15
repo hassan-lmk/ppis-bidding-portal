@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '../../../_supabaseAdmin'
+import { supabaseAdmin } from '../../../../lib/supabase'
 
 // Force dynamic to avoid build-time initialization issues
 export const dynamic = 'force-dynamic'
