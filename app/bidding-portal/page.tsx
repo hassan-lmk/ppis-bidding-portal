@@ -56,6 +56,36 @@ const InteractiveMapComponent = dynamic(
 // Lazy load CartModal to avoid SSR issues
 const CartModal = lazy(() => import('../components/CartModal'))
 
+// Build a usable brochure link from what's stored in the database.
+// Supports both full URLs (leave untouched) and storage object paths.
+const getBrochureHref = (brochureUrl?: string | null) => {
+  if (!brochureUrl) return null
+
+  const trimmed = brochureUrl.trim()
+  if (!trimmed) return null
+
+  // If it's already a full URL (public or signed), use it directly
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed
+  }
+
+  // Otherwise, treat it as a storage object path
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!supabaseUrl) return null
+
+  // Avoid double bucket prefixes if the path already includes one
+  const normalizedPath = trimmed.replace(/^\/+/, '')
+  const hasBucketPrefix =
+    normalizedPath.startsWith('storage/v1/object/public/') ||
+    normalizedPath.startsWith('bidding-brochure/')
+
+  const pathWithBucket = hasBucketPrefix
+    ? normalizedPath
+    : `bidding-brochure/${normalizedPath}`
+
+  return `${supabaseUrl}/storage/v1/object/public/${pathWithBucket}`
+}
+
 interface OpenBlock {
   id: string
   name: string
@@ -861,20 +891,35 @@ function BiddingPortalContent() {
       const downloadingKey = `${areaId}_${pdfUrl}`
       setDownloadingAreas(prev => new Set(prev).add(downloadingKey))
 
-      const blob = await downloadAreaDocumentByUrl(areaId, pdfUrl)
-      
-      let fileName = pdfUrl.split('/').pop() || `${areaName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`
-      fileName = fileName.split('?')[0]
-      if (!fileName.endsWith('.pdf')) fileName = `${fileName}.pdf`
-      
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
+      const result = await downloadAreaDocumentByUrl(areaId, pdfUrl)
+
+      if (result.signedUrl) {
+        const link = document.createElement('a')
+        link.href = result.signedUrl
+        link.target = '_blank'
+        link.rel = 'noopener noreferrer'
+        if (result.downloadName) {
+          link.download = result.downloadName
+        }
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      } else if (result.blob) {
+        let fileName = pdfUrl.split('/').pop() || `${areaName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`
+        fileName = fileName.split('?')[0]
+        if (!fileName.endsWith('.pdf')) fileName = `${fileName}.pdf`
+        
+        const url = window.URL.createObjectURL(result.blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = fileName
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+      } else {
+        throw new Error('No download data received')
+      }
 
     } catch (error) {
       console.error('Error downloading document:', error)
@@ -1137,6 +1182,7 @@ function BiddingPortalContent() {
                 </Card>
               ) : (
                 filteredOpenBlocks.map((block) => {
+                  const brochureHref = getBrochureHref(block.brochure_url)
                   const isPurchased = block.isPurchased
                   const cardClasses = isPurchased
                     ? 'bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200'
@@ -1199,7 +1245,7 @@ function BiddingPortalContent() {
                                 )}
                               </Button>
                             )}
-                            {block.brochure_url && (
+                            {brochureHref && (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -1207,7 +1253,7 @@ function BiddingPortalContent() {
                                 className="border-teal-200 text-teal-700 hover:bg-teal-50 font-medium"
                               >
                                 <a
-                                  href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/bidding-brochure/${block.brochure_url}`}
+                                  href={brochureHref}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 >
@@ -1292,6 +1338,7 @@ function BiddingPortalContent() {
                 const hasBidApp = area.bid_application
                 const bidStatus = hasBidApp?.status
                 const canApply = !hasBidApp || bidStatus === 'draft'
+                const brochureHref = getBrochureHref(area.brochure_url)
                 
                 // Check if submission is closed based on bid_submission_closing_date
                 const isSubmissionClosed = bidSubmissionClosingDate 
@@ -1335,7 +1382,7 @@ function BiddingPortalContent() {
                                   )}
                                 </Button>
                               )}
-                              {area.brochure_url && (
+                              {brochureHref && (
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -1343,7 +1390,7 @@ function BiddingPortalContent() {
                                   className="border-teal-200 text-teal-700 hover:bg-teal-50 font-medium"
                                 >
                                   <a
-                                    href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/bidding-brochure/${area.brochure_url}`}
+                                    href={brochureHref}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                   >

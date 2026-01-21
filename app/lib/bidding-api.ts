@@ -441,14 +441,21 @@ async function getFreshAccessToken(): Promise<string> {
   return session.access_token
 }
 
-async function authorizedDownload(url: string): Promise<Blob> {
+// Download result can be either a direct blob or a signed URL to fetch directly.
+export interface DownloadResult {
+  blob?: Blob
+  signedUrl?: string
+  downloadName?: string
+}
+
+async function authorizedDownload(url: string): Promise<DownloadResult> {
   // Ensure we always use a fresh/valid token to avoid 401s from expired sessions
   const token = await getFreshAccessToken()
 
   const attempt = async (accessToken: string) => {
     const response = await fetch(url, {
-    method: 'GET',
-    headers: {
+      method: 'GET',
+      headers: {
         'Authorization': `Bearer ${accessToken}`,
       },
     })
@@ -472,28 +479,27 @@ async function authorizedDownload(url: string): Promise<Blob> {
     throw new Error(error.error || 'Failed to download document')
   }
 
-  // Check if response is a JSON with signedUrl (fallback mode)
+  // Check if response is a JSON with signedUrl (preferred path for large files)
   const contentType = response.headers.get('content-type')
   if (contentType?.includes('application/json')) {
     const data = await response.json()
     if (data.signedUrl) {
-      // Fetch from the signed URL directly
-      const fileResponse = await fetch(data.signedUrl)
-      if (!fileResponse.ok) {
-        throw new Error('Failed to download from signed URL')
+      return {
+        signedUrl: data.signedUrl as string,
+        downloadName: data.downloadName as string | undefined,
       }
-      return fileResponse.blob()
     }
   }
 
-  return response.blob()
+  // Fallback: server streamed the file directly
+  return { blob: await response.blob() }
 }
 
-export async function downloadAreaDocument(areaId: string): Promise<Blob> {
+export async function downloadAreaDocument(areaId: string): Promise<DownloadResult> {
   return authorizedDownload(`/api/bidding-blocks/download?areaId=${areaId}`)
 }
 
-export async function downloadAreaDocumentByUrl(areaId: string, pdfUrl: string): Promise<Blob> {
+export async function downloadAreaDocumentByUrl(areaId: string, pdfUrl: string): Promise<DownloadResult> {
   const url = `/api/bidding-blocks/download?areaId=${areaId}&pdfUrl=${encodeURIComponent(pdfUrl)}`
   return authorizedDownload(url)
 }
