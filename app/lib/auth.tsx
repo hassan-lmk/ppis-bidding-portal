@@ -215,13 +215,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         console.error('Error fetching user profile:', error)
-        // Don't mark as checked if there's an error - allow retry
+        // If profile does not exist, treat as non-admin and allow UI to progress
         if (error.code === 'PGRST116') {
-          console.log('Profile not found yet, will retry')
+          console.log('Profile not found; marking admin check complete to avoid spinner')
           setIsAdmin(false)
-          setAdminChecked(false) // Allow retry
-          setCachedUserId(null)
+          setAdminChecked(true)
+          setCachedUserId(user.id)
           setUserProfile(null)
+          setAdminStatusToCache(user.id, false)
         } else {
           setIsAdmin(false)
           setAdminChecked(true)
