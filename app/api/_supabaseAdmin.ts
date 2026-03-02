@@ -126,40 +126,18 @@ const customFetch = async (input: RequestInfo | URL, init?: RequestInit): Promis
   return fetch(input, init)
 }
 
-// Lazy initialization function to avoid build-time issues
-let _supabaseAdmin: ReturnType<typeof createClient> | null = null
+const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
-function getSupabaseAdmin() {
-  if (!_supabaseAdmin) {
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!serviceRoleKey) {
-      throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured')
+// Uses the anon key; RLS is enforced on Supabase.
+export const supabaseAdmin = createClient(
+  supabaseUrl,
+  anonKey,
+  {
+    auth: { persistSession: false },
+    global: {
+      fetch: customFetch
     }
-    _supabaseAdmin = createClient(
-      supabaseUrl,
-      serviceRoleKey,
-      { 
-        auth: { persistSession: false },
-        global: {
-          fetch: customFetch // Use custom fetch for self-hosted Supabase
-        }
-      }
-    )
   }
-  return _supabaseAdmin
-}
-
-// Create a Proxy that lazily initializes the client
-// This prevents initialization during build time
-export const supabaseAdmin = new Proxy({} as any, {
-  get(_target, prop) {
-    const client = getSupabaseAdmin()
-    const value = (client as any)[prop]
-    if (typeof value === 'function') {
-      return value.bind(client)
-    }
-    return value
-  }
-}) as ReturnType<typeof createClient>
+)
 
 

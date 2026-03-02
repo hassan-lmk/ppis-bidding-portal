@@ -124,16 +124,18 @@ export async function GET(request: NextRequest) {
     }
 
     // Get the area details including the PDF file paths (pdf_url is now jsonb array)
-    const { data: area, error: areaError } = await supabaseAdmin
+    const { data: areaRaw, error: areaError } = await supabaseAdmin
       .from('areas')
       .select('id, name, pdf_url, pdf_filename')
       .eq('id', areaId)
       .single()
 
-    if (areaError || !area) {
+    if (areaError || !areaRaw) {
       console.error('Error fetching area:', areaError)
       return NextResponse.json({ error: 'Area not found' }, { status: 404 })
     }
+
+    const area = areaRaw as { id: string; name: string; pdf_url: any; pdf_filename: string | null }
 
     // Determine which PDF to use
     // Note: pdf_url array contains bid documents (require purchase)
@@ -333,16 +335,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the area details including the PDF file paths (pdf_url is now jsonb array)
-    const { data: area, error: areaError } = await supabaseAdmin
+    const { data: areaRaw, error: areaError } = await supabaseAdmin
       .from('areas')
       .select('id, name, pdf_url, pdf_filename')
       .eq('id', areaId)
       .single()
 
-    if (areaError || !area) {
+    if (areaError || !areaRaw) {
       console.error('Error fetching area:', areaError)
       return NextResponse.json({ error: 'Area not found' }, { status: 404 })
     }
+
+    const area = areaRaw as { id: string; name: string; pdf_url: any; pdf_filename: string | null }
 
     // Determine which PDF to use
     let targetPdfUrl: string | null = null

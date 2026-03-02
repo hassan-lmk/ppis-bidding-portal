@@ -139,19 +139,16 @@ export async function verifyAdminAuth(request: NextRequest): Promise<AdminAuthRe
       }
     }
 
-    // Check admin status from database
-    // Use service role key to bypass RLS since we've already verified the user's identity
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!serviceRoleKey) {
-      console.error('SUPABASE_SERVICE_ROLE_KEY not configured')
+    // Check admin status from database — uses anon key; RLS is enforced on Supabase.
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    if (!anonKey) {
+      console.error('NEXT_PUBLIC_SUPABASE_ANON_KEY not configured')
       return {
         authorized: false,
         error: 'Server configuration error'
       }
     }
 
-    // Use direct HTTP requests with service role key (like other API routes)
-    // This ensures apikey header is included and bypasses RLS
     const makeServiceRoleRequest = async (path: string, method: string = 'GET'): Promise<any> => {
       return new Promise((resolve, reject) => {
         const urlObj = new URL(`${supabaseUrl}/rest/v1/${path}`)
@@ -163,8 +160,8 @@ export async function verifyAdminAuth(request: NextRequest): Promise<AdminAuthRe
           path: urlObj.pathname + urlObj.search,
           method: method,
           headers: {
-            'Authorization': `Bearer ${serviceRoleKey}`,
-            'apikey': serviceRoleKey,
+            'Authorization': `Bearer ${anonKey}`,
+            'apikey': anonKey,
             'Content-Type': 'application/json'
           },
           agent: isHttps ? httpsAgent : undefined

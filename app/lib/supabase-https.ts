@@ -12,7 +12,7 @@ export async function makeSupabaseRequest(
   options: SupabaseRequestOptions = {}
 ): Promise<any> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   
   if (!supabaseUrl || !supabaseKey) {
     throw new Error('Missing Supabase configuration')
@@ -83,7 +83,7 @@ export async function makeSupabaseRequest(
 // Helper functions for common operations
 export async function selectFromTable(table: string, select = '*', filters: Record<string, any> = {}, orderBy?: string, limit?: number): Promise<any> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   
   if (!supabaseUrl || !supabaseKey) {
     throw new Error('Missing Supabase configuration')
@@ -137,7 +137,7 @@ export async function insertIntoTable(table: string, data: any): Promise<any> {
 
 export async function updateTable(table: string, data: any, filters: Record<string, any>): Promise<any> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   
   if (!supabaseUrl || !supabaseKey) {
     throw new Error('Missing Supabase configuration')
@@ -162,7 +162,7 @@ export async function updateTable(table: string, data: any, filters: Record<stri
 
 export async function deleteFromTable(table: string, filters: Record<string, any>): Promise<any> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   
   if (!supabaseUrl || !supabaseKey) {
     throw new Error('Missing Supabase configuration')
@@ -227,7 +227,7 @@ export async function deleteFromTable(table: string, filters: Record<string, any
 
 export async function deleteFromStorage(bucket: string, filePath: string): Promise<any> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   
   if (!supabaseUrl || !supabaseKey) {
     throw new Error('Missing Supabase configuration')

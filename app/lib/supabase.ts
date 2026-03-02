@@ -159,34 +159,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 })
 
-// Server-side admin client: lazy init so build can run without SUPABASE_SERVICE_ROLE_KEY.
-// Set SUPABASE_SERVICE_ROLE_KEY only at runtime (e.g. in Dokploy env) for security.
-let _supabaseAdminInstance: ReturnType<typeof createClient> | null = null
-
-function getSupabaseAdmin() {
-  if (!_supabaseAdminInstance) {
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? supabaseAnonKey
-    if (!key || !key.trim()) {
-      throw new Error('supabaseKey is required. Set SUPABASE_SERVICE_ROLE_KEY at runtime (e.g. in Dokploy env) for server-side admin operations.')
-    }
-    _supabaseAdminInstance = createClient(supabaseUrl, key, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      },
-      global: {
-        fetch: createServerFetch()
-      }
-    })
-  }
-  return _supabaseAdminInstance
-}
-
-export const supabaseAdmin = new Proxy({} as ReturnType<typeof createClient>, {
-  get(_, prop) {
-    const client = getSupabaseAdmin()
-    const value = (client as any)[prop]
-    if (typeof value === 'function') return value.bind(client)
-    return value
+// Server-side client for API routes — uses the anon key; RLS is enforced on Supabase.
+export const supabaseAdmin = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  },
+  global: {
+    fetch: createServerFetch()
   }
 })
