@@ -5,7 +5,6 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrlRaw = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseUrl = (supabaseUrlRaw && supabaseUrlRaw.trim()) || 'https://ppisapi.lmkr.com/'
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 if (!supabaseAnonKey || !supabaseAnonKey.trim()) {
   throw new Error('Missing env NEXT_PUBLIC_SUPABASE_ANON_KEY. Please set this environment variable.')
@@ -160,17 +159,34 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 })
 
-// Server-side client for API routes
-export const supabaseAdmin = createClient(
-  supabaseUrl,
-  supabaseServiceRoleKey ?? supabaseAnonKey,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    },
-    global: {
-      fetch: createServerFetch()
+// Server-side admin client: lazy init so build can run without SUPABASE_SERVICE_ROLE_KEY.
+// Set SUPABASE_SERVICE_ROLE_KEY only at runtime (e.g. in Dokploy env) for security.
+let _supabaseAdminInstance: ReturnType<typeof createClient> | null = null
+
+function getSupabaseAdmin() {
+  if (!_supabaseAdminInstance) {
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? supabaseAnonKey
+    if (!key || !key.trim()) {
+      throw new Error('supabaseKey is required. Set SUPABASE_SERVICE_ROLE_KEY at runtime (e.g. in Dokploy env) for server-side admin operations.')
     }
+    _supabaseAdminInstance = createClient(supabaseUrl, key, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      },
+      global: {
+        fetch: createServerFetch()
+      }
+    })
   }
-)
+  return _supabaseAdminInstance
+}
+
+export const supabaseAdmin = new Proxy({} as ReturnType<typeof createClient>, {
+  get(_, prop) {
+    const client = getSupabaseAdmin()
+    const value = (client as any)[prop]
+    if (typeof value === 'function') return value.bind(client)
+    return value
+  }
+})
