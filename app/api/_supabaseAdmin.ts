@@ -140,4 +140,21 @@ export const supabaseAdmin = createClient(
   }
 )
 
+/**
+ * Create a Supabase client that sends the user's JWT so RLS sees the request as that user.
+ * Use this in API routes after validating the token so that queries (e.g. area_downloads,
+ * bid_applications) respect RLS policies that filter by auth.uid().
+ */
+export function createServerSupabaseClient(accessToken: string) {
+  return createClient(supabaseUrl, anonKey, {
+    auth: { persistSession: false },
+    global: {
+      fetch: customFetch,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  })
+}
+
 

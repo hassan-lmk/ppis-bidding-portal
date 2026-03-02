@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '../../../_supabaseAdmin'
 import { 
   encryptWorkUnits,
-  getMasterKey
+  getMasterKey,
+  verifyEncryption
 } from '../../../../lib/work-units-encryption'
 
 // Force dynamic to avoid build-time initialization issues
@@ -112,25 +113,38 @@ export async function POST(
       }, { status: 400 })
     }
 
-    // Get master key from environment (persistent across database resets)
-    // This ensures all encrypted data can always be decrypted
-    const masterKey = getMasterKey()
-    
-    // Encrypt work units with the master key
-    const encryptedWorkUnits = encryptWorkUnits(workUnitsNum, masterKey)
-    
-    console.log('✓ Work units encrypted with persistent master key')
+    let masterKey: Buffer
+    let encryptedWorkUnits: string
+    try {
+      masterKey = getMasterKey()
+      encryptedWorkUnits = encryptWorkUnits(workUnitsNum, masterKey)
+    } catch (encErr) {
+      console.error('Encryption service error:', encErr)
+      return NextResponse.json(
+        { error: 'Encryption service unavailable — please try again or contact support.' },
+        { status: 503 }
+      )
+    }
 
-    // Update bid application with encrypted work units
-    // Note: work_units remains NULL until decryption
+    try {
+      verifyEncryption(workUnitsNum, encryptedWorkUnits, masterKey)
+    } catch (verifyErr) {
+      console.error('Encryption verification failed:', verifyErr)
+      return NextResponse.json(
+        { error: 'Encryption integrity check failed — please try again.' },
+        { status: 500 }
+      )
+    }
+
     const { data: updatedApp, error: updateError } = await (supabaseAdmin as any)
       .from('bid_applications')
       .update({
-        work_units: null, // Keep as NULL until decrypted
+        work_units: null,
         work_units_encrypted: encryptedWorkUnits,
         work_units_encrypted_at: new Date().toISOString(),
         work_units_submitted_at: new Date().toISOString(),
         work_units_status: 'submitted',
+        work_units_plaintext_backup: workUnitsNum,
         updated_at: new Date().toISOString()
       })
       .eq('id', id)

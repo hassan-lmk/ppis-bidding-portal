@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '../../../../lib/supabase'
+import { supabaseAdmin, createServerSupabaseClient } from '../../../_supabaseAdmin'
 
 // Force dynamic to avoid build-time initialization issues
 export const dynamic = 'force-dynamic'
@@ -10,20 +10,20 @@ function requireEnv(key: string): string {
   return v
 }
 
-async function getUserFromRequest(request: NextRequest) {
+async function getUserAndToken(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (!authHeader?.startsWith('Bearer ')) {
-    return null
+    return { user: null, token: null }
   }
-  
+
   const token = authHeader.substring(7)
   const { data: { user }, error } = await (supabaseAdmin as any).auth.getUser(token)
-  
+
   if (error || !user) {
-    return null
+    return { user: null, token: null }
   }
-  
-  return user
+
+  return { user, token }
 }
 
 // Get PayFast access token
@@ -83,18 +83,19 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getUserFromRequest(request)
-    
-    if (!user) {
+    const { user, token } = await getUserAndToken(request)
+
+    if (!user || !token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const supabaseUser = createServerSupabaseClient(token)
     const { id } = await params
     const body = await request.json()
     const { payment_method } = body
 
-    // Get application
-    const { data: app } = await (supabaseAdmin as any)
+    // Get application (RLS sees user via token)
+    const { data: app } = await supabaseUser
       .from('bid_applications')
       .select(`
         *,
@@ -161,7 +162,7 @@ export async function POST(
       }
 
       // Store basket_id for later verification
-      await (supabaseAdmin as any)
+      await supabaseUser
         .from('bid_applications')
         .update({
           payment_transaction_id: basketId,
@@ -192,7 +193,7 @@ export async function POST(
       }
 
       // Update application with challan details
-      const { error: updateError } = await (supabaseAdmin as any)
+      const { error: updateError } = await supabaseUser
         .from('bid_applications')
         .update({
           payment_method: 'bank_challan',
@@ -213,7 +214,7 @@ export async function POST(
       }
 
       // Return updated application
-      const { data: updatedApp } = await (supabaseAdmin as any)
+      const { data: updatedApp } = await supabaseUser
         .from('bid_applications')
         .select(`
           *,

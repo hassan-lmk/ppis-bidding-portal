@@ -1,23 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '../../../_supabaseAdmin'
+import { supabaseAdmin, createServerSupabaseClient } from '../../../_supabaseAdmin'
 
 // Force dynamic to avoid build-time initialization issues
 export const dynamic = 'force-dynamic'
 
-async function getUserFromRequest(request: NextRequest) {
+async function getUserAndToken(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (!authHeader?.startsWith('Bearer ')) {
-    return null
+    return { user: null, token: null }
   }
-  
+
   const token = authHeader.substring(7)
   const { data: { user }, error } = await (supabaseAdmin as any).auth.getUser(token)
-  
+
   if (error || !user) {
-    return null
+    return { user: null, token: null }
   }
-  
-  return user
+
+  return { user, token }
 }
 
 // POST /api/bid-applications/[id]/documents - Upload document
@@ -26,16 +26,17 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getUserFromRequest(request)
-    
-    if (!user) {
+    const { user, token } = await getUserAndToken(request)
+
+    if (!user || !token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const supabaseUser = createServerSupabaseClient(token)
     const { id } = await params
 
-    // Get application
-    const { data: app } = await (supabaseAdmin as any)
+    // Get application (RLS sees user via token)
+    const { data: app } = await supabaseUser
       .from('bid_applications')
       .select('*')
       .eq('id', id)
@@ -100,12 +101,12 @@ export async function POST(
     
     // If no company name in application, try to get from user profile
     if (!companyName) {
-      const { data: profile } = await (supabaseAdmin as any)
+      const { data: profile } = await supabaseUser
         .from('user_profiles')
         .select('company_name')
         .eq('id', user.id)
         .maybeSingle()
-      
+
       companyName = (profile as any)?.company_name || 'Company'
     }
     
@@ -129,7 +130,7 @@ export async function POST(
     const buffer = Buffer.from(arrayBuffer)
 
     // Upload to Supabase Storage
-    const { error: uploadError } = await (supabaseAdmin as any).storage
+    const { error: uploadError } = await supabaseUser.storage
       .from('bid-submissions')
       .upload(filePath, buffer, {
         cacheControl: '3600',
@@ -143,7 +144,7 @@ export async function POST(
     }
 
     // Get the file URL
-    const { data: urlData } = (supabaseAdmin as any).storage
+    const { data: urlData } = supabaseUser.storage
       .from('bid-submissions')
       .getPublicUrl(filePath)
 
@@ -158,31 +159,36 @@ export async function POST(
     // For multiple file types, we want to keep all existing files and add the new one
     if (!allowsMultipleFiles) {
       // Delete existing document of same type for this company (if replacing)
-      const deleteQuery = (supabaseAdmin as any)
+      let deleteQuery = supabaseUser
         .from('bid_documents')
         .delete()
         .eq('bid_application_id', id)
         .eq('document_type', documentType)
 
       if (consortiumCompanyId) {
-        await deleteQuery.eq('consortium_company_id', consortiumCompanyId)
+        deleteQuery = deleteQuery.eq('consortium_company_id', consortiumCompanyId)
       } else {
-        await deleteQuery.is('consortium_company_id', null)
+        deleteQuery = deleteQuery.is('consortium_company_id', null)
       }
+      await deleteQuery
     }
 
-    // Insert document record
-    const { data: docData, error: insertError } = await (supabaseAdmin as any)
+    // Insert document record (truncate string fields to fit typical varchar(50) columns)
+    const maxLen = 50
+    const trunc = (s: string | null | undefined) =>
+      s == null ? null : String(s).length > maxLen ? String(s).slice(0, maxLen) : String(s)
+
+    const { data: docData, error: insertError } = await supabaseUser
       .from('bid_documents')
       .insert({
         bid_application_id: id,
-        document_type: documentType,
-        document_label: documentLabel,
+        document_type: trunc(documentType),
+        document_label: documentLabel != null && documentLabel !== '' ? trunc(documentLabel) : null,
         consortium_company_id: consortiumCompanyId || null,
         file_url: urlData.publicUrl,
-        file_name: file.name,
+        file_name: trunc(file.name),
         file_size: file.size,
-        file_type: file.type
+        file_type: trunc(file.type)
       })
       .select()
       .single()
@@ -205,12 +211,13 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getUserFromRequest(request)
-    
-    if (!user) {
+    const { user, token } = await getUserAndToken(request)
+
+    if (!user || !token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const supabaseUser = createServerSupabaseClient(token)
     const { id } = await params
     const { searchParams } = new URL(request.url)
     const documentId = searchParams.get('documentId')
@@ -219,8 +226,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'documentId is required' }, { status: 400 })
     }
 
-    // Get application
-    const { data: app } = await (supabaseAdmin as any)
+    // Get application (RLS sees user via token)
+    const { data: app } = await supabaseUser
       .from('bid_applications')
       .select('*')
       .eq('id', id)
@@ -232,13 +239,13 @@ export async function DELETE(
     }
 
     if ((app as any).status !== 'draft') {
-      return NextResponse.json({ 
-        error: 'Cannot delete documents from submitted application' 
+      return NextResponse.json({
+        error: 'Cannot delete documents from submitted application'
       }, { status: 403 })
     }
 
     // Get document
-    const { data: doc } = await (supabaseAdmin as any)
+    const { data: doc } = await supabaseUser
       .from('bid_documents')
       .select('*')
       .eq('id', documentId)
@@ -254,7 +261,7 @@ export async function DELETE(
       const url = new URL((doc as any).file_url)
       const pathParts = url.pathname.split('/storage/v1/object/public/bid-submissions/')
       if (pathParts[1]) {
-        await (supabaseAdmin as any).storage
+        await supabaseUser.storage
           .from('bid-submissions')
           .remove([decodeURIComponent(pathParts[1])])
       }
@@ -263,7 +270,7 @@ export async function DELETE(
     }
 
     // Delete record
-    const { error: deleteError } = await (supabaseAdmin as any)
+    const { error: deleteError } = await supabaseUser
       .from('bid_documents')
       .delete()
       .eq('id', documentId)

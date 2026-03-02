@@ -1,23 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '../../../../../lib/supabase'
+import { supabaseAdmin, createServerSupabaseClient } from '../../../../_supabaseAdmin'
 
 // Force dynamic to avoid build-time initialization issues
 export const dynamic = 'force-dynamic'
 
-async function getUserFromRequest(request: NextRequest) {
+async function getUserAndToken(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (!authHeader?.startsWith('Bearer ')) {
-    return null
+    return { user: null, token: null }
   }
-  
+
   const token = authHeader.substring(7)
   const { data: { user }, error } = await (supabaseAdmin as any).auth.getUser(token)
-  
+
   if (error || !user) {
-    return null
+    return { user: null, token: null }
   }
-  
-  return user
+
+  return { user, token }
 }
 
 // POST /api/bid-applications/[id]/payment/upload-proof - Upload bank challan proof
@@ -26,16 +26,17 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getUserFromRequest(request)
-    
-    if (!user) {
+    const { user, token } = await getUserAndToken(request)
+
+    if (!user || !token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const supabaseUser = createServerSupabaseClient(token)
     const { id } = await params
 
-    // Get application
-    const { data: app } = await (supabaseAdmin as any)
+    // Get application (RLS sees user via token)
+    const { data: app } = await supabaseUser
       .from('bid_applications')
       .select('*')
       .eq('id', id)
@@ -86,12 +87,12 @@ export async function POST(
     
     // If no company name in application, try to get from user profile
     if (!companyName) {
-      const { data: profile } = await (supabaseAdmin as any)
+      const { data: profile } = await supabaseUser
         .from('user_profiles')
         .select('company_name')
         .eq('id', user.id)
         .maybeSingle()
-      
+
       companyName = profile?.company_name || 'Company'
     }
     
@@ -113,8 +114,8 @@ export async function POST(
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
 
-    // Upload to Supabase Storage
-    const { error: uploadError } = await (supabaseAdmin as any).storage
+    // Upload to Supabase Storage (user-scoped client for RLS on storage if applicable)
+    const { error: uploadError } = await supabaseUser.storage
       .from('bid-submissions')
       .upload(filePath, buffer, {
         cacheControl: '3600',
@@ -128,7 +129,7 @@ export async function POST(
     }
 
     // Get public URL
-    const { data: urlData } = (supabaseAdmin as any).storage
+    const { data: urlData } = supabaseUser.storage
       .from('bid-submissions')
       .getPublicUrl(filePath)
 

@@ -99,6 +99,20 @@ export function encryptWorkUnits(workUnits: number, masterKey: Buffer): string {
 }
 
 /**
+ * Verify that an encrypted value can be correctly decrypted back to the original.
+ * Performs a round-trip check: decrypt the ciphertext and compare with the original plaintext.
+ * @throws Error if the decrypted value does not match the original
+ */
+export function verifyEncryption(originalValue: number, encryptedValue: string, masterKey: Buffer): void {
+  const decrypted = decryptWorkUnits(encryptedValue, masterKey)
+  if (decrypted !== originalValue) {
+    throw new Error(
+      `Encryption verification failed: round-trip mismatch (expected ${originalValue}, got ${decrypted})`
+    )
+  }
+}
+
+/**
  * Decrypt work units value using AES-256-GCM
  * Expects base64-encoded string: IV + AuthTag + EncryptedData
  */

@@ -1,39 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '../_supabaseAdmin'
+import { supabaseAdmin, createServerSupabaseClient } from '../_supabaseAdmin'
 
 // Force dynamic to avoid build-time initialization issues
 export const dynamic = 'force-dynamic'
 
-// Get user from authorization header
-async function getUserFromRequest(request: NextRequest) {
+// Get user and token from authorization header; returns { user, token } or { user: null, token: null }
+async function getUserAndToken(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (!authHeader?.startsWith('Bearer ')) {
-    return null
+    return { user: null, token: null }
   }
-  
+
   const token = authHeader.substring(7)
   const { data: { user }, error } = await (supabaseAdmin as any).auth.getUser(token)
-  
+
   if (error || !user) {
-    return null
+    return { user: null, token: null }
   }
-  
-  return user
+
+  return { user, token }
 }
 
 // GET /api/bid-applications - Get all applications for current user
 export async function GET(request: NextRequest) {
   try {
-    const user = await getUserFromRequest(request)
-    
-    if (!user) {
+    const { user, token } = await getUserAndToken(request)
+
+    if (!user || !token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const supabaseUser = createServerSupabaseClient(token)
 
     const { searchParams } = new URL(request.url)
     const areaId = searchParams.get('areaId')
 
-    let query = supabaseAdmin
+    let query = supabaseUser
       .from('bid_applications')
       .select(`
         *,
@@ -65,11 +67,13 @@ export async function GET(request: NextRequest) {
 // POST /api/bid-applications - Create new application
 export async function POST(request: NextRequest) {
   try {
-    const user = await getUserFromRequest(request)
-    
-    if (!user) {
+    const { user, token } = await getUserAndToken(request)
+
+    if (!user || !token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const supabaseUser = createServerSupabaseClient(token)
 
     const body = await request.json()
     const { area_id } = body
@@ -78,8 +82,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'area_id is required' }, { status: 400 })
     }
 
-    // Check if user has purchased this area
-    const { data: purchase } = await (supabaseAdmin as any)
+    // Check if user has purchased this area (RLS sees user via token)
+    const { data: purchase } = await supabaseUser
       .from('area_downloads')
       .select('id')
       .eq('user_id', user.id)
@@ -88,13 +92,13 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (!purchase) {
-      return NextResponse.json({ 
-        error: 'You must purchase the bidding document first' 
+      return NextResponse.json({
+        error: 'You must purchase the bidding document first'
       }, { status: 403 })
     }
 
     // Check if application already exists
-    const { data: existing } = await (supabaseAdmin as any)
+    const { data: existing } = await supabaseUser
       .from('bid_applications')
       .select('*')
       .eq('user_id', user.id)
@@ -103,7 +107,7 @@ export async function POST(request: NextRequest) {
 
     if (existing) {
       // Always fetch full application with all relations
-      const { data: fullApp } = await (supabaseAdmin as any)
+      const { data: fullApp } = await supabaseUser
         .from('bid_applications')
         .select(`
           *,
@@ -115,18 +119,18 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (existing.status === 'submitted' || existing.status === 'under_review' || existing.status === 'approved') {
-        return NextResponse.json({ 
+        return NextResponse.json({
           error: 'You have already submitted an application for this block',
           application: fullApp
         }, { status: 409 })
       }
-      
+
       // Return existing draft
       return NextResponse.json(fullApp)
     }
 
-    // Check area status
-    const { data: area } = await (supabaseAdmin as any)
+    // Check area status (areas may be public read; use same client for consistency)
+    const { data: area } = await supabaseUser
       .from('areas')
       .select('id, status, bid_submission_deadline')
       .eq('id', area_id)
@@ -149,7 +153,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create new application
-    const { data: newApp, error: createError } = await (supabaseAdmin as any)
+    const { data: newApp, error: createError } = await supabaseUser
       .from('bid_applications')
       .insert({
         user_id: user.id,

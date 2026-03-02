@@ -1,27 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '../../../lib/supabase'
-import { 
+import { supabaseAdmin, createServerSupabaseClient } from '../../_supabaseAdmin'
+import {
   encryptWorkUnits,
-  getMasterKey
+  getMasterKey,
+  verifyEncryption
 } from '../../../lib/work-units-encryption'
 
 // Force dynamic to avoid build-time initialization issues
 export const dynamic = 'force-dynamic'
 
-async function getUserFromRequest(request: NextRequest) {
+async function getUserAndToken(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (!authHeader?.startsWith('Bearer ')) {
-    return null
+    return { user: null, token: null }
   }
-  
+
   const token = authHeader.substring(7)
   const { data: { user }, error } = await (supabaseAdmin as any).auth.getUser(token)
-  
+
   if (error || !user) {
-    return null
+    return { user: null, token: null }
   }
-  
-  return user
+
+  return { user, token }
 }
 
 // GET /api/bid-applications/[id] - Get specific application
@@ -30,15 +31,16 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getUserFromRequest(request)
-    
-    if (!user) {
+    const { user, token } = await getUserAndToken(request)
+
+    if (!user || !token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const supabaseUser = createServerSupabaseClient(token)
     const { id } = await params
 
-    const { data, error } = await (supabaseAdmin as any)
+    const { data, error } = await supabaseUser
       .from('bid_applications')
       .select(`
         *,
@@ -72,17 +74,18 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getUserFromRequest(request)
-    
-    if (!user) {
+    const { user, token } = await getUserAndToken(request)
+
+    if (!user || !token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const supabaseUser = createServerSupabaseClient(token)
     const { id } = await params
     const body = await request.json()
 
-    // Get current application
-    const { data: currentApp } = await (supabaseAdmin as any)
+    // Get current application (RLS sees user via token)
+    const { data: currentApp } = await supabaseUser
       .from('bid_applications')
       .select('*')
       .eq('id', id)
@@ -149,24 +152,39 @@ export async function PATCH(
     // Step 4: Work Unit field - Encrypt when saving
     if (body.work_units !== undefined) {
       const workUnitNum = Number(body.work_units)
-      if (!isNaN(workUnitNum) && workUnitNum >= 100) {
-        // Get master key from environment (persistent across database resets)
-        const masterKey = getMasterKey()
-        
-        // Encrypt work units with the master key
-        const encryptedWorkUnits = encryptWorkUnits(workUnitNum, masterKey)
-        
-        // Store encrypted work units (keep work_units as NULL until decryption)
-        updateData.work_units = null // Keep as NULL until decrypted
+      if (!isNaN(workUnitNum) && workUnitNum >= 101) {
+        let masterKey: Buffer
+        let encryptedWorkUnits: string
+        try {
+          masterKey = getMasterKey()
+          encryptedWorkUnits = encryptWorkUnits(workUnitNum, masterKey)
+        } catch (encErr) {
+          console.error('Encryption service error:', encErr)
+          return NextResponse.json(
+            { error: 'Encryption service unavailable — please try again or contact support.' },
+            { status: 503 }
+          )
+        }
+
+        try {
+          verifyEncryption(workUnitNum, encryptedWorkUnits, masterKey)
+        } catch (verifyErr) {
+          console.error('Encryption verification failed:', verifyErr)
+          return NextResponse.json(
+            { error: 'Encryption integrity check failed — please try again.' },
+            { status: 500 }
+          )
+        }
+
+        updateData.work_units = null
         updateData.work_units_encrypted = encryptedWorkUnits
         updateData.work_units_encrypted_at = new Date().toISOString()
-        
-        console.log('✓ Work units encrypted with persistent master key')
+        updateData.work_units_plaintext_backup = workUnitNum
       }
     }
 
     // Update application
-    const { error: updateError } = await (supabaseAdmin as any)
+    const { error: updateError } = await supabaseUser
       .from('bid_applications')
       .update(updateData)
       .eq('id', id)
@@ -180,7 +198,7 @@ export async function PATCH(
     // Handle consortium companies if provided
     if (body.consortium_companies !== undefined) {
       // Delete existing
-      await (supabaseAdmin as any)
+      await supabaseUser
         .from('bid_consortium_companies')
         .delete()
         .eq('bid_application_id', id)
@@ -188,7 +206,7 @@ export async function PATCH(
       // Insert new with percentages if provided
       if (currentApp.submission_type === 'consortium' && Array.isArray(body.consortium_companies) && body.consortium_companies.length > 0) {
         const percentages = body.consortium_percentages as Record<string, string> | undefined
-        
+
         const companies = body.consortium_companies.map((name: string, index: number) => {
           // Get percentage for this company using company_X key
           let percentage = null
@@ -202,7 +220,7 @@ export async function PATCH(
               }
             }
           }
-          
+
           return {
             bid_application_id: id,
             company_name: name,
@@ -211,7 +229,7 @@ export async function PATCH(
           }
         })
 
-        const { error: insertError } = await (supabaseAdmin as any)
+        const { error: insertError } = await supabaseUser
           .from('bid_consortium_companies')
           .insert(companies)
 
@@ -222,14 +240,14 @@ export async function PATCH(
     } else if (body.consortium_percentages !== undefined && typeof body.consortium_percentages === 'object' && currentApp.submission_type === 'consortium') {
       // Update percentages only (if companies already exist)
       const percentages = body.consortium_percentages as Record<string, string>
-      
+
       // Get existing companies
-      const { data: existingCompanies } = await (supabaseAdmin as any)
+      const { data: existingCompanies } = await supabaseUser
         .from('bid_consortium_companies')
         .select('id, sort_order')
         .eq('bid_application_id', id)
         .order('sort_order')
-      
+
       if (existingCompanies) {
         for (let i = 0; i < existingCompanies.length; i++) {
           const companyKey = `company_${i}`
@@ -237,7 +255,7 @@ export async function PATCH(
           if (percentage !== undefined && percentage !== '') {
             const percentageNum = Number(percentage)
             if (!isNaN(percentageNum) && percentageNum >= 0 && percentageNum <= 100) {
-              const { error: updateError } = await (supabaseAdmin as any)
+              const { error: updateError } = await supabaseUser
                 .from('bid_consortium_companies')
                 .update({ work_unit_percentage: percentageNum })
                 .eq('id', existingCompanies[i].id)
@@ -253,7 +271,7 @@ export async function PATCH(
     }
 
     // Return updated application
-    const { data: updatedApp } = await (supabaseAdmin as any)
+    const { data: updatedApp } = await supabaseUser
       .from('bid_applications')
       .select(`
         *,

@@ -1,35 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '../../lib/supabase'
+import { supabaseAdmin, createServerSupabaseClient } from '../_supabaseAdmin'
 
-async function getUserFromRequest(request: NextRequest) {
+async function getUserAndToken(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (!authHeader?.startsWith('Bearer ')) {
-    return null
+    return { user: null, token: null }
   }
-  
+
   const token = authHeader.substring(7)
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
-  
+
   if (error || !user) {
-    return null
+    return { user: null, token: null }
   }
-  
-  return user
+
+  return { user, token }
 }
 
 // GET /api/tickets - Get user's tickets
 export async function GET(request: NextRequest) {
   try {
-    const user = await getUserFromRequest(request)
-    
-    if (!user) {
+    const { user, token } = await getUserAndToken(request)
+
+    if (!user || !token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const supabaseUser = createServerSupabaseClient(token)
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
 
-    let query = supabaseAdmin
+    let query = supabaseUser
       .from('support_tickets')
       .select(`
         *,
@@ -60,23 +61,24 @@ export async function GET(request: NextRequest) {
 // POST /api/tickets - Create a new ticket
 export async function POST(request: NextRequest) {
   try {
-    const user = await getUserFromRequest(request)
-    
-    if (!user) {
+    const { user, token } = await getUserAndToken(request)
+
+    if (!user || !token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const supabaseUser = createServerSupabaseClient(token)
     const body = await request.json()
     const { subject, description, category, priority, area_id, bid_application_id } = body
 
     if (!subject || !description) {
-      return NextResponse.json({ 
-        error: 'Subject and description are required' 
+      return NextResponse.json({
+        error: 'Subject and description are required'
       }, { status: 400 })
     }
 
-    // Create ticket
-    const { data: ticket, error } = await supabaseAdmin
+    // Create ticket (RLS sees user via token)
+    const { data: ticket, error } = await supabaseUser
       .from('support_tickets')
       .insert({
         user_id: user.id,
@@ -97,7 +99,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create initial message with the description
-    await supabaseAdmin
+    await supabaseUser
       .from('ticket_messages')
       .insert({
         ticket_id: ticket.id,
