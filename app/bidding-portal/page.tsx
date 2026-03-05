@@ -231,16 +231,39 @@ function BiddingPortalContent() {
   const { addToCart, isInCart, getTotalItems } = useCart()
   const router = useRouter()
 
-  // Helper function to get auth token
+  // Helper function to get auth token - redirects to login if session expired
   async function getAuthToken() {
     if (session?.access_token) {
+      // Check if token is about to expire (within 60 seconds)
+      const expiresAt = session.expires_at ? session.expires_at * 1000 : 0
+      if (expiresAt > 0 && expiresAt < Date.now() + 60000) {
+        // Try to refresh the session
+        const { data, error } = await supabase.auth.refreshSession()
+        if (error || !data?.session?.access_token) {
+          // Session expired and couldn't refresh - redirect to login
+          router.push('/login?redirect=/bidding-portal')
+          throw new Error('Session expired. Redirecting to login...')
+        }
+        return data.session.access_token
+      }
       return session.access_token
     }
     const { data: { session: newSession } } = await supabase.auth.getSession()
     if (!newSession?.access_token) {
-      throw new Error('Session expired. Please sign in again.')
+      // No session - redirect to login
+      router.push('/login?redirect=/bidding-portal')
+      throw new Error('Session expired. Redirecting to login...')
     }
     return newSession.access_token
+  }
+
+  // Helper function to handle API errors and redirect on 401
+  function handleApiError(error: any, response?: Response) {
+    if (response?.status === 401 || error?.message?.includes('Unauthorized') || error?.message?.includes('Session expired')) {
+      router.push('/login?redirect=/bidding-portal')
+      return true
+    }
+    return false
   }
 
   // Convert OpenBlock to Area format for cart
@@ -300,9 +323,16 @@ function BiddingPortalContent() {
           if (isMounted && data.bid_submission_closing_date) {
             setBidSubmissionClosingDate(new Date(data.bid_submission_closing_date))
           }
+        } else if (response.status === 401) {
+          handleApiError(null, response)
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error fetching closing date:', err)
+        // Check if it's a session error
+        if (err?.message?.includes('Session expired')) {
+          // Already handled by getAuthToken
+          return
+        }
       }
     }
     
@@ -398,8 +428,12 @@ function BiddingPortalContent() {
       }
 
       setLoadedTabs(prev => new Set(prev).add(tab))
-    } catch (err) {
+    } catch (err: any) {
       console.error(`Error fetching data for tab ${tab}:`, err)
+      // Check if it's a session error - don't show error message if redirecting
+      if (err?.message?.includes('Session expired') || err?.message?.includes('Redirecting to login')) {
+        return
+      }
       setError('An unexpected error occurred')
     } finally {
       setTabLoading(prev => ({ ...prev, [tab]: false }))
@@ -584,6 +618,8 @@ function BiddingPortalContent() {
     if (ticketsRes.ok) {
       const ticketsData = await ticketsRes.json()
       setTickets(ticketsData)
+    } else if (ticketsRes.status === 401) {
+      handleApiError(null, ticketsRes)
     }
   }
 
@@ -1087,7 +1123,7 @@ function BiddingPortalContent() {
 
   return (
     <BiddingPortalLayout activeTab={activeTab} title={getTitle()} subtitle={getSubtitle()}>
-      {error && (
+      {error && !error.includes('Unauthorized') && !error.includes('Session expired') && !error.includes('Redirecting') && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 flex items-center space-x-3">
           <AlertCircle className="w-5 h-5" />
           <span>{error}</span>

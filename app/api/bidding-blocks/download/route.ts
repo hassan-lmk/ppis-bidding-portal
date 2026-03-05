@@ -1,37 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// Helper function to log downloads (non-blocking)
-function logDownload(areaId: string, userId: string | null, areaName: string, resourceType: string = 'bidding-blocks') {
-  // Fire and forget - don't block the response
-  // Use setImmediate to ensure it runs after the response is sent
+// Helper function to log downloads (non-blocking). Uses user's token when provided so RLS allows the insert.
+function logDownload(
+  areaId: string,
+  userId: string | null,
+  areaName: string,
+  resourceType: string = 'bidding-blocks',
+  accessToken?: string | null
+) {
   setImmediate(async () => {
     try {
-      const { supabaseAdmin } = await import('../../../lib/supabase')
-      const { error: logError } = await (supabaseAdmin as any)
+      const client = accessToken
+        ? (await import('../../_supabaseAdmin')).createServerSupabaseClient(accessToken)
+        : (await import('../../../lib/supabase')).supabaseAdmin
+      const { error: logError } = await (client as any)
         .from('document_downloads')
         .insert({
           document_id: areaId,
-          user_id: userId, // Can be null for public users
+          user_id: userId,
           resource_type: resourceType,
           downloaded: new Date().toISOString()
         })
 
       if (logError) {
         console.error('Error logging download:', logError)
-        // If table doesn't exist, this is expected - user needs to run the SQL script
         if (logError.code === 'PGRST204') {
           console.warn('document_downloads table not found. Please run the extend_document_downloads_table.sql script in Supabase Studio.')
         }
-        // Don't fail the download if logging fails
       } else {
         console.log(`Download logged for ${resourceType}: user ${userId || 'public'}, area ${areaName} (${areaId})`)
       }
     } catch (logErr: any) {
-      // Silently handle errors - don't log SSL errors that might be connection issues
       if (logErr?.message && !logErr.message.includes('SSL') && !logErr.message.includes('tlsv1')) {
         console.error('Unexpected error logging download:', logErr)
       }
-      // Don't fail the download if logging fails
     }
   })
 }
@@ -113,18 +115,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Authorization token required' }, { status: 401 })
     }
 
-    // Import Supabase clients dynamically
-    const { supabase, supabaseAdmin } = await import('../../../lib/supabase')
+    // Import Supabase: anon client for auth, user-scoped client for data (RLS with user JWT, no service role)
+    const { supabaseAdmin: anonClient } = await import('../../../lib/supabase')
+    const { createServerSupabaseClient } = await import('../../_supabaseAdmin')
 
-    // Verify the user with the token using admin client
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token)
+    // Verify the user with the token (anon key)
+    const { data: { user }, error: authError } = await anonClient.auth.getUser(token)
     if (authError || !user) {
       console.error('Authentication error (GET download):', authError)
       return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 })
     }
 
-    // Get the area details including the PDF file paths (pdf_url is now jsonb array)
-    const { data: areaRaw, error: areaError } = await supabaseAdmin
+    const userSupabase = createServerSupabaseClient(token)
+
+    // Get the area details (user-scoped client, respects RLS)
+    const { data: areaRaw, error: areaError } = await userSupabase
       .from('areas')
       .select('id, name, pdf_url, pdf_filename')
       .eq('id', areaId)
@@ -160,23 +165,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'No PDF document available for this area' }, { status: 404 })
     }
 
-    // All documents in pdf_url array require purchase (they are bid documents, not brochures)
-    // Brochures are handled separately via brochure_url field with direct public links
-    {
-      const { data: downloadRecord, error: downloadError } = await supabaseAdmin
-        .from('area_downloads')
-        .select('id, payment_status')
-        .eq('user_id', user.id)
-        .eq('area_id', areaId)
-        .eq('payment_status', 'completed')
-        .single()
+    // Verify purchase with user-scoped client; .maybeSingle() avoids PGRST116 when 0 rows
+    const { data: downloadRecord, error: downloadError } = await userSupabase
+      .from('area_downloads')
+      .select('id, payment_status')
+      .eq('user_id', user.id)
+      .eq('area_id', areaId)
+      .eq('payment_status', 'completed')
+      .maybeSingle()
 
-      if (downloadError || !downloadRecord) {
-        console.error('Download verification error:', downloadError)
-        return NextResponse.json({ 
-          error: 'You must purchase this area before downloading the document' 
-        }, { status: 403 })
-      }
+    if (downloadError || !downloadRecord) {
+      if (downloadError) console.error('Download verification error:', downloadError)
+      return NextResponse.json({
+        error: 'You must purchase this area before downloading the document'
+      }, { status: 403 })
     }
 
     // Normalize path for bidding-blocks bucket (bid documents are always in bidding-blocks)
@@ -245,7 +247,7 @@ export async function GET(request: NextRequest) {
     for (const pathVariant of tryPaths) {
       console.log(`Attempting to create signed URL for path: "${pathVariant}" in bucket: "${bucket}"`)
       
-      const { data: signedUrlData, error: signedUrlError } = await supabaseAdmin.storage
+      const { data: signedUrlData, error: signedUrlError } = await userSupabase.storage
         .from(bucket)
         .createSignedUrl(pathVariant, 3600, { download: downloadName }) // 1 hour expiry
 
@@ -288,7 +290,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Log the download (non-blocking)
-    logDownload(areaId, user.id, area.name)
+    logDownload(areaId, user.id, area.name, 'bidding-blocks', token)
 
     // For better reliability, return the signed URL as JSON
     // The client will fetch it directly, avoiding server-side TLS/network issues
@@ -324,18 +326,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Authorization token required' }, { status: 401 })
     }
 
-    // Import Supabase clients dynamically
-    const { supabase, supabaseAdmin } = await import('../../../lib/supabase')
+    // Import Supabase: anon client for auth, user-scoped client for data (RLS with user JWT, no service role)
+    const { supabaseAdmin: anonClient } = await import('../../../lib/supabase')
+    const { createServerSupabaseClient } = await import('../../_supabaseAdmin')
 
-    // Verify the user with the token
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token)
+    // Verify the user with the token (anon key)
+    const { data: { user }, error: authError } = await anonClient.auth.getUser(token)
     if (authError || !user) {
       console.error('Authentication error (POST download):', authError)
       return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 })
     }
 
-    // Get the area details including the PDF file paths (pdf_url is now jsonb array)
-    const { data: areaRaw, error: areaError } = await supabaseAdmin
+    const userSupabase = createServerSupabaseClient(token)
+
+    // Get the area details (user-scoped client, respects RLS)
+    const { data: areaRaw, error: areaError } = await userSupabase
       .from('areas')
       .select('id, name, pdf_url, pdf_filename')
       .eq('id', areaId)
@@ -369,19 +374,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No PDF document available for this area' }, { status: 404 })
     }
 
-    // Check if user has purchased this area
-    const { data: downloadRecord, error: downloadError } = await supabaseAdmin
+    // Verify purchase with user-scoped client; .maybeSingle() avoids PGRST116 when 0 rows
+    const { data: downloadRecord, error: downloadError } = await userSupabase
       .from('area_downloads')
       .select('id, payment_status')
       .eq('user_id', user.id)
       .eq('area_id', areaId)
       .eq('payment_status', 'completed')
-      .single()
+      .maybeSingle()
 
     if (downloadError || !downloadRecord) {
-      console.error('Download verification error:', downloadError)
-      return NextResponse.json({ 
-        error: 'You must purchase this area before downloading the document' 
+      if (downloadError) console.error('Download verification error:', downloadError)
+      return NextResponse.json({
+        error: 'You must purchase this area before downloading the document'
       }, { status: 403 })
     }
 
@@ -447,7 +452,7 @@ export async function POST(request: NextRequest) {
     for (const pathVariant of tryPaths) {
       console.log(`POST: Attempting to create signed URL for path: "${pathVariant}" in bucket: "${bucket}"`)
       
-      const { data: signedUrlData, error: signedUrlError } = await supabaseAdmin.storage
+      const { data: signedUrlData, error: signedUrlError } = await userSupabase.storage
         .from(bucket)
         .createSignedUrl(pathVariant, 3600, { download: downloadName })
 
@@ -477,7 +482,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Log the download (non-blocking)
-    logDownload(areaId, user.id, area.name)
+    logDownload(areaId, user.id, area.name, 'bidding-blocks', token)
 
     // For better reliability, return the signed URL as JSON
     // The client will fetch it directly, avoiding server-side TLS/network issues

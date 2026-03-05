@@ -40,8 +40,10 @@ function LoginContent() {
       }
 
       // Redirect after successful login
+      // Use window.location.href for a full page reload to ensure auth state is properly initialized
       const redirectParam = searchParams.get('redirect')
-      router.push(redirectParam || '/')
+      const redirectUrl = redirectParam || '/'
+      window.location.href = redirectUrl
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred')
       setLoading(false)
