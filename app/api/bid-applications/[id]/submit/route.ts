@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '../../../_supabaseAdmin'
+import { supabaseAdmin, createServerSupabaseClient } from '../../../_supabaseAdmin'
 import { sendEmail, getBidApplicationSubmissionTemplate } from '../../../../lib/email'
 
 // Force dynamic to avoid build-time initialization issues
@@ -29,20 +29,20 @@ const DOCUMENT_TYPES: Record<string, DocumentType> = {
   financial_report: { label: 'Financial Report of last 5 years', required: true, perCompany: true, multipleFiles: true, maxFiles: 5 }
 }
 
-async function getUserFromRequest(request: NextRequest) {
+async function getUserAndTokenFromRequest(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (!authHeader?.startsWith('Bearer ')) {
-    return null
+    return { user: null, token: null }
   }
   
   const token = authHeader.substring(7)
   const { data: { user }, error } = await (supabaseAdmin as any).auth.getUser(token)
   
   if (error || !user) {
-    return null
+    return { user: null, token: null }
   }
   
-  return user
+  return { user, token }
 }
 
 // POST /api/bid-applications/[id]/submit - Submit application
@@ -51,16 +51,17 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getUserFromRequest(request)
+    const { user, token } = await getUserAndTokenFromRequest(request)
     
-    if (!user) {
+    if (!user || !token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const supabaseUser = createServerSupabaseClient(token)
 
     const { id } = await params
 
     // Get full application with details
-    const { data: app, error: fetchError } = await (supabaseAdmin as any)
+    const { data: app, error: fetchError } = await (supabaseUser as any)
       .from('bid_applications')
       .select(`
         *,
@@ -91,7 +92,7 @@ export async function POST(
     }
 
     // Check bid submission closing date from bid_opening_settings
-    const { data: settings, error: settingsError } = await (supabaseAdmin as any)
+    const { data: settings, error: settingsError } = await (supabaseUser as any)
       .from('bid_opening_settings')
       .select('bid_submission_closing_date')
       .maybeSingle()
@@ -249,7 +250,7 @@ export async function POST(
     }
 
     // Update status to submitted
-    const { error: updateError } = await (supabaseAdmin as any)
+    const { error: updateError } = await (supabaseUser as any)
       .from('bid_applications')
       .update({
         status: 'submitted',
@@ -265,7 +266,7 @@ export async function POST(
     }
 
     // Return updated application
-    const { data: submittedApp } = await (supabaseAdmin as any)
+    const { data: submittedApp } = await (supabaseUser as any)
       .from('bid_applications')
       .select(`
         *,
