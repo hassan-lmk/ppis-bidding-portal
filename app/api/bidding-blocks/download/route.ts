@@ -39,13 +39,58 @@ function logDownload(
 }
 
 // Helper function to create file response
-function createFileResponse(buffer: Buffer, areaName: string) {
-  // Cast Buffer to BodyInit for NextResponse
+function getFileExtension(input?: string | null): string | null {
+  if (!input) return null
+  // Drop querystring/hash and get last path segment
+  const noQuery = input.split('?')[0].split('#')[0]
+  const lastSegment = noQuery.split('/').filter(Boolean).pop() || ''
+  const match = lastSegment.match(/\.([a-zA-Z0-9]{1,10})$/)
+  if (!match) return null
+  return match[1].toLowerCase()
+}
+
+function getMimeTypeFromExtension(ext: string | null): string {
+  switch (ext) {
+    case 'pdf':
+      return 'application/pdf'
+    case 'zip':
+      return 'application/zip'
+    case 'rar':
+      return 'application/vnd.rar'
+    case '7z':
+      return 'application/x-7z-compressed'
+    case 'tar':
+      return 'application/x-tar'
+    case 'gz':
+      return 'application/gzip'
+    case 'doc':
+      return 'application/msword'
+    case 'docx':
+      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    case 'xls':
+      return 'application/vnd.ms-excel'
+    case 'xlsx':
+      return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    case 'png':
+      return 'image/png'
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg'
+    case 'webp':
+      return 'image/webp'
+    default:
+      return 'application/octet-stream'
+  }
+}
+
+// Helper function to create file response
+function createFileResponse(buffer: Buffer, downloadName: string) {
+  const ext = getFileExtension(downloadName)
   return new NextResponse(buffer as any, {
     status: 200,
     headers: {
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="${areaName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf"`,
+      'Content-Type': getMimeTypeFromExtension(ext),
+      'Content-Disposition': `attachment; filename="${downloadName}"`,
       'Content-Length': buffer.length.toString(),
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Pragma': 'no-cache',
@@ -70,10 +115,13 @@ function getTokenFromRequest(request: NextRequest): string | null {
   return null
 }
 
-// Build a safe download filename
-function getDownloadName(areaName: string): string {
-  const safe = areaName.replace(/[^a-zA-Z0-9._-]/g, '_') || 'document'
-  return safe.endsWith('.pdf') ? safe : `${safe}.pdf`
+// Build a safe download filename (preserve original extension)
+function getDownloadName(areaName: string, targetUrlOrPath?: string | null, dbFileName?: string | null): string {
+  const safeBase = areaName.replace(/[^a-zA-Z0-9._-]/g, '_') || 'document'
+  const ext = getFileExtension(targetUrlOrPath) || getFileExtension(dbFileName) || 'pdf'
+  // Avoid double extensions if the areaName already includes one.
+  const safeBaseNoExt = safeBase.replace(new RegExp(`\\.${ext}$`, 'i'), '')
+  return `${safeBaseNoExt}.${ext}`
 }
 
 async function fetchSignedUrlFile(signedUrl: string): Promise<Buffer> {
@@ -242,7 +290,7 @@ export async function GET(request: NextRequest) {
     let signedUrl: string | null = null
     let lastError: any = null
 
-    const downloadName = getDownloadName(area.name)
+    const downloadName = getDownloadName(area.name, targetPdfUrl, area.pdf_filename)
 
     for (const pathVariant of tryPaths) {
       console.log(`Attempting to create signed URL for path: "${pathVariant}" in bucket: "${bucket}"`)
@@ -447,7 +495,7 @@ export async function POST(request: NextRequest) {
     let signedUrl: string | null = null
     let lastError: any = null
 
-    const downloadName = getDownloadName(area.name)
+    const downloadName = getDownloadName(area.name, targetPdfUrl, area.pdf_filename)
 
     for (const pathVariant of tryPaths) {
       console.log(`POST: Attempting to create signed URL for path: "${pathVariant}" in bucket: "${bucket}"`)

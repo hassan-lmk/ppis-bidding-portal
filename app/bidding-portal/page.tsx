@@ -941,9 +941,13 @@ function BiddingPortalContent() {
         link.click()
         document.body.removeChild(link)
       } else if (result.blob) {
-        let fileName = pdfUrl.split('/').pop() || `${areaName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`
-        fileName = fileName.split('?')[0]
-        if (!fileName.endsWith('.pdf')) fileName = `${fileName}.pdf`
+        const fileFromUrl = (pdfUrl.split('/').pop() || '').split('?')[0]
+        const fileExtMatch = fileFromUrl.match(/\.([a-zA-Z0-9]{1,10})$/)
+        const ext = fileExtMatch ? fileExtMatch[1] : 'pdf'
+        const safeAreaBase = (areaName.replace(/[^a-zA-Z0-9._-]/g, '_') || 'document')
+        const fileName = fileFromUrl && fileExtMatch
+          ? fileFromUrl.replace(/[^a-zA-Z0-9._-]/g, '_')
+          : `${safeAreaBase}.${ext}`
         
         const url = window.URL.createObjectURL(result.blob)
         const link = document.createElement('a')
