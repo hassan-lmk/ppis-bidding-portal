@@ -66,6 +66,13 @@ body {
   white-space: nowrap;
 }
 
+/* Used by BiddingPortalNewsTicker for the latest update ticker */
+.animate-marquee-slow {
+  display: inline-block;
+  animation: marquee 60s linear infinite;
+  white-space: nowrap;
+}
+
 @keyframes cart-pulse {
   0%, 100% {
     transform: scale(1);
