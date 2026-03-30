@@ -101,6 +101,18 @@ export const DOCUMENT_TYPES = {
     required: true,
     perCompany: false
   },
+  annexure_g: {
+    key: 'annexure_g',
+    label: 'Annexure G',
+    required: true,
+    perCompany: false
+  },
+  annexure_h: {
+    key: 'annexure_h',
+    label: 'Annexure H',
+    required: true,
+    perCompany: false
+  },
   annexure_i: {
     key: 'annexure_i',
     label: 'Pakistan Offshore Petroleum Rules, 2023 (Annexure I)',

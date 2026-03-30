@@ -20,6 +20,8 @@ const DOCUMENT_TYPES: Record<string, DocumentType> = {
   annexure_c: { label: 'Particulars by applicants (Annexure C)', required: true, perCompany: true },
   annexure_d: { label: 'Work Program (Annexure D)', required: true, perCompany: false },
   annexure_f: { label: 'Unconditional undertaking (Annexure F)', required: true, perCompany: false },
+  annexure_g: { label: 'Annexure G', required: true, perCompany: false },
+  annexure_h: { label: 'Annexure H', required: true, perCompany: false },
   annexure_i: { label: 'Pakistan Offshore Petroleum Rules (Annexure I)', required: true, perCompany: false },
   annexure_j: { label: 'Pakistan Petroleum Policy 2012 (Annexure J)', required: true, perCompany: false },
   juridical_status: { label: 'Evidence of juridical status', required: true, perCompany: false },
