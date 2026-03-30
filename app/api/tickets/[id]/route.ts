@@ -1,20 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '../../../lib/supabase'
+import { supabaseAdmin, createServerSupabaseClient } from '../../_supabaseAdmin'
 
-async function getUserFromRequest(request: NextRequest) {
+async function getUserAndToken(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (!authHeader?.startsWith('Bearer ')) {
-    return null
+    return { user: null, token: null }
   }
-  
+
   const token = authHeader.substring(7)
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
-  
+
   if (error || !user) {
-    return null
+    return { user: null, token: null }
   }
-  
-  return user
+
+  return { user, token }
 }
 
 // GET /api/tickets/[id] - Get a single ticket with messages
@@ -23,16 +23,17 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getUserFromRequest(request)
-    
-    if (!user) {
+    const { user, token } = await getUserAndToken(request)
+
+    if (!user || !token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const supabaseUser = createServerSupabaseClient(token)
     const { id } = await params
 
-    // Get ticket
-    const { data: ticket, error: ticketError } = await supabaseAdmin
+    // Use user-scoped client so RLS matches list/create ticket routes (anon key alone has no auth.uid())
+    const { data: ticket, error: ticketError } = await supabaseUser
       .from('support_tickets')
       .select(`
         *,
@@ -48,7 +49,7 @@ export async function GET(
     }
 
     // Get messages
-    const { data: messages, error: messagesError } = await supabaseAdmin
+    const { data: messages, error: messagesError } = await supabaseUser
       .from('ticket_messages')
       .select('*')
       .eq('ticket_id', id)
@@ -59,7 +60,7 @@ export async function GET(
     }
 
     // Mark messages as read
-    await supabaseAdmin
+    await supabaseUser
       .from('ticket_messages')
       .update({ is_read: true })
       .eq('ticket_id', id)
@@ -82,12 +83,13 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getUserFromRequest(request)
-    
-    if (!user) {
+    const { user, token } = await getUserAndToken(request)
+
+    if (!user || !token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const supabaseUser = createServerSupabaseClient(token)
     const { id } = await params
     const body = await request.json()
     const { message } = body
@@ -97,7 +99,7 @@ export async function POST(
     }
 
     // Verify ticket belongs to user
-    const { data: ticket } = await supabaseAdmin
+    const { data: ticket } = await supabaseUser
       .from('support_tickets')
       .select('id, status')
       .eq('id', id)
@@ -113,7 +115,7 @@ export async function POST(
     }
 
     // Create message
-    const { data: newMessage, error } = await supabaseAdmin
+    const { data: newMessage, error } = await supabaseUser
       .from('ticket_messages')
       .insert({
         ticket_id: id,
@@ -131,7 +133,7 @@ export async function POST(
 
     // Update ticket status to open if it was awaiting reply
     if (ticket.status === 'awaiting_reply') {
-      await supabaseAdmin
+      await supabaseUser
         .from('support_tickets')
         .update({ status: 'open' })
         .eq('id', id)
@@ -150,12 +152,13 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getUserFromRequest(request)
-    
-    if (!user) {
+    const { user, token } = await getUserAndToken(request)
+
+    if (!user || !token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const supabaseUser = createServerSupabaseClient(token)
     const { id } = await params
     const body = await request.json()
     const { status } = body
@@ -165,7 +168,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
     }
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabaseUser
       .from('support_tickets')
       .update({ status: 'closed' })
       .eq('id', id)
