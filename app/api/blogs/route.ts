@@ -15,7 +15,10 @@ function slugVariants(slug: string): string[] {
   const out = new Set<string>([trimmed])
   out.add(trimmed.replace(/_/g, '-'))
   out.add(trimmed.replace(/-/g, '_'))
-  return [...out]
+  // Avoid spreading a Set (can break with TS targets < es2015)
+  const arr: string[] = []
+  out.forEach(v => arr.push(v))
+  return arr
 }
 
 async function resolveBlogCategoryId(categoryParam: string): Promise<string | null> {
