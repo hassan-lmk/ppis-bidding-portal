@@ -21,7 +21,7 @@ function LoginContent() {
   useEffect(() => {
     if (!authLoading && user) {
       const redirectParam = searchParams.get('redirect')
-      router.push(redirectParam || '/')
+      router.push(redirectParam || '/bidding-portal')
     }
   }, [user, authLoading, router, searchParams])
 
@@ -42,7 +42,7 @@ function LoginContent() {
       // Redirect after successful login
       // Use window.location.href for a full page reload to ensure auth state is properly initialized
       const redirectParam = searchParams.get('redirect')
-      const redirectUrl = redirectParam || '/'
+      const redirectUrl = redirectParam || '/bidding-portal'
       window.location.href = redirectUrl
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred')

@@ -5,13 +5,18 @@ import { useRouter } from 'next/navigation'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { supabase } from '../lib/supabase'
+import { getBrochureHref } from '../lib/brochure'
+import type { Area as CartArea } from '../lib/bidding-api'
+import { useCart } from '../lib/cart-context'
+import { useAuth } from '../lib/auth'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { Card, CardContent } from './ui/card'
-import { MapPin, Clock, ShoppingCart, FileCheck, X, Download, Loader2 } from 'lucide-react'
+import { FileCheck, X, Download, Loader2, CreditCard } from 'lucide-react'
 
 interface Area {
   id: string
+  zone_id: string
   name: string
   code: string
   status: string
@@ -21,14 +26,23 @@ interface Area {
   zone_name: string
   block_name: string
   block_type: string
+  brochure_url: string | null
+  pdf_url: string[] | null
 }
 
 interface InteractiveMapPortalProps {
   openBlocksOnly?: boolean
+  /** `landing` uses a taller map for the public home page */
+  variant?: 'embedded' | 'landing'
 }
 
-export default function InteractiveMapPortal({ openBlocksOnly = true }: InteractiveMapPortalProps) {
+export default function InteractiveMapPortal({
+  openBlocksOnly = true,
+  variant = 'embedded',
+}: InteractiveMapPortalProps) {
   const router = useRouter()
+  const { addToCart } = useCart()
+  const { user } = useAuth()
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<L.Map | null>(null)
   const layersRef = useRef<{ [key: string]: L.Layer }>({})
@@ -52,7 +66,8 @@ export default function InteractiveMapPortal({ openBlocksOnly = true }: Interact
       let query = supabase
         .from('areas')
         .select(`
-          id, name, code, status, price, geometry, bid_submission_deadline,
+          id, zone_id, name, code, status, price, geometry, bid_submission_deadline,
+          brochure_url, pdf_url,
           zones!inner(
             name,
             blocks!inner(name, type)
@@ -75,12 +90,15 @@ export default function InteractiveMapPortal({ openBlocksOnly = true }: Interact
         .filter((a: any) => a.geometry)
         .map((a: any) => ({
           id: a.id,
+          zone_id: a.zone_id,
           name: a.name,
           code: a.code,
           status: a.status,
           price: a.price || 0,
           geometry: a.geometry,
           bid_submission_deadline: a.bid_submission_deadline,
+          brochure_url: a.brochure_url ?? null,
+          pdf_url: Array.isArray(a.pdf_url) ? a.pdf_url : a.pdf_url ? [a.pdf_url] : null,
           zone_name: a.zones.name,
           block_name: a.zones.blocks.name,
           block_type: a.zones.blocks.type
@@ -292,16 +310,48 @@ export default function InteractiveMapPortal({ openBlocksOnly = true }: Interact
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(price)
   }
 
+  const areaToCartArea = (a: Area): CartArea => ({
+    id: a.id,
+    zone_id: a.zone_id,
+    name: a.name,
+    code: a.code,
+    description: `${a.block_name} - ${a.zone_name}`,
+    pdf_url: a.pdf_url,
+    pdf_filename: a.pdf_url?.[0]?.split('/').pop() || null,
+    price: a.price,
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  })
+
+  /** Add block to cart and open PayFast flow in portal (cart checkout). */
+  const handlePurchaseDocuments = () => {
+    if (!selectedArea) return
+    if (purchasedAreaIds.has(selectedArea.id)) return
+    addToCart(areaToCartArea(selectedArea))
+    const path = '/bidding-portal?tab=opened-bidding&openCart=1'
+    if (user) {
+      router.push(path)
+    } else {
+      router.push(`/login?redirect=${encodeURIComponent(path)}`)
+    }
+  }
+
+  const mapHeightClass =
+    variant === 'landing'
+      ? 'min-h-[70vh] h-[min(90vh,920px)] md:min-h-[75vh]'
+      : 'h-[700px]'
+
   if (loading) {
     return (
-      <div className="h-[700px] bg-gray-50 flex items-center justify-center">
+      <div className={`${mapHeightClass} bg-gray-50 flex items-center justify-center rounded-xl`}>
         <Loader2 className="w-8 h-8 animate-spin text-teal-600" />
       </div>
     )
   }
 
   return (
-    <div className="relative h-[700px]">
+    <div className={`relative ${mapHeightClass}`}>
       {/* Map Container */}
       <div ref={mapRef} className="h-full w-full rounded-xl" />
 
@@ -377,23 +427,38 @@ export default function InteractiveMapPortal({ openBlocksOnly = true }: Interact
                 )}
               </div>
 
-              {purchasedAreaIds.has(selectedArea.id) ? (
-                <Button
-                  onClick={() => router.push(`/bid-submission/${selectedArea.id}`)}
-                  className="w-full bg-teal-600 hover:bg-teal-700"
-                >
-                  <FileCheck className="w-4 h-4 mr-2" />
-                  Apply for Bidding
-                </Button>
-              ) : (
-                <Button
-                  onClick={() => router.push('/bidding-blocks')}
-                  className="w-full bg-teal-600 hover:bg-teal-700"
-                >
-                  <ShoppingCart className="w-4 h-4 mr-2" />
-                  Purchase ({formatPrice(selectedArea.price)})
-                </Button>
-              )}
+              <div className="flex flex-col gap-2">
+                {getBrochureHref(selectedArea.brochure_url) && (
+                  <Button variant="outline" className="w-full border-teal-200 text-teal-800" asChild>
+                    <a
+                      href={getBrochureHref(selectedArea.brochure_url)!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Download brochure (free)
+                    </a>
+                  </Button>
+                )}
+
+                {purchasedAreaIds.has(selectedArea.id) ? (
+                  <Button
+                    onClick={() => router.push(`/bid-submission/${selectedArea.id}`)}
+                    className="w-full bg-teal-600 hover:bg-teal-700"
+                  >
+                    <FileCheck className="w-4 h-4 mr-2" />
+                    Apply for bidding
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handlePurchaseDocuments}
+                    className="w-full bg-teal-600 hover:bg-teal-700"
+                  >
+                    <CreditCard className="w-4 h-4 mr-2" />
+                    Buy bidding documents — PayFast ({formatPrice(selectedArea.price)})
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>

@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { downloadAreaDocumentByUrl, Area } from '../lib/bidding-api'
+import { getBrochureHref } from '../lib/brochure'
 import { useCart } from '../lib/cart-context'
 import BiddingPortalLayout, { PortalTab } from '../components/BiddingPortalLayout'
 import { generatePaymentReceipt, PaymentReceiptData } from '../lib/receipt-generator'
@@ -55,36 +56,6 @@ const InteractiveMapComponent = dynamic(
 
 // Lazy load CartModal to avoid SSR issues
 const CartModal = lazy(() => import('../components/CartModal'))
-
-// Build a usable brochure link from what's stored in the database.
-// Supports both full URLs (leave untouched) and storage object paths.
-const getBrochureHref = (brochureUrl?: string | null) => {
-  if (!brochureUrl) return null
-
-  const trimmed = brochureUrl.trim()
-  if (!trimmed) return null
-
-  // If it's already a full URL (public or signed), use it directly
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-    return trimmed
-  }
-
-  // Otherwise, treat it as a storage object path
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (!supabaseUrl) return null
-
-  // Avoid double bucket prefixes if the path already includes one
-  const normalizedPath = trimmed.replace(/^\/+/, '')
-  const hasBucketPrefix =
-    normalizedPath.startsWith('storage/v1/object/public/') ||
-    normalizedPath.startsWith('bidding-brochure/')
-
-  const pathWithBucket = hasBucketPrefix
-    ? normalizedPath
-    : `bidding-brochure/${normalizedPath}`
-
-  return `${supabaseUrl}/storage/v1/object/public/${pathWithBucket}`
-}
 
 interface OpenBlock {
   id: string
@@ -298,6 +269,13 @@ function BiddingPortalContent() {
       setActiveTab(tabParam)
     }
   }, [tabParam])
+
+  // Open cart after redirect from public map (PayFast checkout flow)
+  useEffect(() => {
+    if (searchParams.get('openCart') === '1') {
+      setCartModalOpen(true)
+    }
+  }, [searchParams])
 
   // Update current time every second for countdown
   useEffect(() => {
