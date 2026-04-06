@@ -4,9 +4,12 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import Link from 'next/link'
+import CompanyNameAutocomplete from '../components/CompanyNameAutocomplete'
+
+/** Bidding portal onboarding always registers users as bidders. */
+const ONBOARDING_USER_TYPE = 'bidder' as const
 
 export default function OnboardingPage() {
-  const [accountType, setAccountType] = useState<'company' | 'bidder'>('company')
   const [companyName, setCompanyName] = useState('')
   const [address, setAddress] = useState('')
   const [pocContactNumber, setPocContactNumber] = useState('')
@@ -15,11 +18,7 @@ export default function OnboardingPage() {
   const [loading, setLoading] = useState(false)
   const [checkingStatus, setCheckingStatus] = useState(true)
   const [contactNumberError, setContactNumberError] = useState('')
-  const [showCompanyDropdown, setShowCompanyDropdown] = useState(false)
-  const [companyNames, setCompanyNames] = useState<string[]>([])
-  const [filteredCompanies, setFilteredCompanies] = useState<string[]>([])
-  const companyInputRef = useRef<HTMLInputElement>(null)
-  const companyDropdownRef = useRef<HTMLDivElement>(null)
+  const companyPrefilledFromSignupRef = useRef(false)
 
   const router = useRouter()
   const { user, loading: authLoading, userProfile, adminChecked, refreshAdminStatus } = useAuth()
@@ -43,7 +42,7 @@ export default function OnboardingPage() {
           console.log('Profile not cached in onboarding, fetching from database...')
           const { data, error: profileError } = await supabase
             .from('user_profiles')
-            .select('onboarding_completed, admin_approved, status')
+            .select('onboarding_completed, status')
             .eq('id', user.id)
             .single()
 
@@ -55,13 +54,8 @@ export default function OnboardingPage() {
           profile = data
         }
 
-        // If onboarding is already completed, redirect based on status
-        if (profile?.onboarding_completed) {
-          if (profile.admin_approved) {
-            router.push('/bidding-portal') // Redirect to bidding portal if approved
-          } else {
-            router.push('/pending-approval') // Redirect to pending approval page
-          }
+        if (profile?.onboarding_completed === true) {
+          router.push('/bidding-portal')
         } else {
           setCheckingStatus(false)
         }
@@ -74,29 +68,15 @@ export default function OnboardingPage() {
     checkOnboardingStatus()
   }, [user, router, authLoading, userProfile, adminChecked])
 
-  // Fetch companies from database
+  // Pre-fill company from signup (stored in auth user metadata)
   useEffect(() => {
-    const fetchCompanies = async () => {
-      try {
-        const response = await fetch('/api/companies')
-        if (response.ok) {
-          const companies = await response.json()
-          setCompanyNames(companies)
-          setFilteredCompanies(companies)
-        } else {
-          console.error('Failed to fetch companies')
-          setCompanyNames([])
-          setFilteredCompanies([])
-        }
-      } catch (error) {
-        console.error('Error fetching companies:', error)
-        setCompanyNames([])
-        setFilteredCompanies([])
-      }
+    if (!user || companyPrefilledFromSignupRef.current) return
+    const raw = user.user_metadata?.company_name
+    if (typeof raw === 'string' && raw.trim()) {
+      setCompanyName(raw.trim())
+      companyPrefilledFromSignupRef.current = true
     }
-
-    fetchCompanies()
-  }, [])
+  }, [user])
 
   // Validate contact number format
   const validateContactNumber = (value: string): string => {
@@ -135,51 +115,6 @@ export default function OnboardingPage() {
     }
   }
 
-  const handleCompanyNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    setCompanyName(value)
-    
-    if (value.trim()) {
-      const filtered = companyNames.filter(company =>
-        company.toLowerCase().includes(value.toLowerCase())
-      )
-      setFilteredCompanies(filtered)
-      setShowCompanyDropdown(true)
-    } else {
-      setFilteredCompanies(companyNames)
-      setShowCompanyDropdown(true)
-    }
-  }
-
-  const handleCompanyNameFocus = () => {
-    setShowCompanyDropdown(true)
-    setFilteredCompanies(companyNames)
-  }
-
-  const handleCompanySelect = (company: string) => {
-    setCompanyName(company)
-    setShowCompanyDropdown(false)
-    companyInputRef.current?.focus()
-  }
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        companyDropdownRef.current &&
-        !companyDropdownRef.current.contains(event.target as Node) &&
-        companyInputRef.current &&
-        !companyInputRef.current.contains(event.target as Node)
-      ) {
-        setShowCompanyDropdown(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [])
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -212,7 +147,7 @@ export default function OnboardingPage() {
         p_company_name: companyName.trim(),
         p_address: address.trim(),
         p_poc_contact_number: pocContactNumber.trim(),
-        p_user_type: accountType
+        p_user_type: ONBOARDING_USER_TYPE,
       })
 
       if (rpcError) {
@@ -263,7 +198,7 @@ export default function OnboardingPage() {
                     companyName: companyName.trim(),
                     address: address.trim(),
                     contactNumber: pocContactNumber.trim(),
-                    accountType: accountType === 'company' ? 'PPIS Subscriber' : 'Bidder Access'
+                    accountType: 'Bidder Access',
                   })
                 })
               )
@@ -278,8 +213,8 @@ export default function OnboardingPage() {
         await refreshAdminStatus()
         
         setTimeout(() => {
-          router.push('/pending-approval')
-        }, 2000)
+          router.push('/bidding-portal')
+        }, 1500)
       } else {
         setError(result.message || 'Failed to complete onboarding')
         setLoading(false)
@@ -341,8 +276,12 @@ export default function OnboardingPage() {
             <h2 className="text-3xl font-bold text-gray-900 mb-2">
               Complete Your Profile
             </h2>
-            <p className="text-gray-500 mb-6">
-              We need a few more details to set up your account
+            <p className="text-gray-500 mb-2">
+              We need a few more details to set up your bidder account
+            </p>
+            <p className="text-sm text-teal-800 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2 text-left">
+              You are registering on the <span className="font-semibold">Bidding Portal</span> — your access type is{' '}
+              <span className="font-semibold">Bidder</span>. Complete your organisation details below.
             </p>
           </div>
 
@@ -363,11 +302,11 @@ export default function OnboardingPage() {
                 <span>Profile Setup</span>
               </div>
               <div className="text-gray-400">→</div>
-              <div className="flex items-center text-gray-400">
+              <div className="flex items-center text-teal-600 font-medium">
                 <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-2a6 6 0 100-12 6 6 0 000 12z" clipRule="evenodd" />
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                 </svg>
-                <span>Admin Approval</span>
+                <span>Portal access</span>
               </div>
             </div>
           </div>
@@ -384,92 +323,13 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {/* Account Type Selection */}
-          <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Select Account Type <span className="text-red-500">*</span>
-            </label>
-            <div className="space-y-3">
-              <label className="flex items-start p-3 border-2 rounded-lg cursor-pointer transition-all hover:bg-blue-100"
-                style={{ borderColor: accountType === 'company' ? '#0d9488' : '#e5e7eb' }}>
-                <input
-                  type="radio"
-                  name="accountType"
-                  value="company"
-                  checked={accountType === 'company'}
-                  onChange={(e) => setAccountType(e.target.value as 'company' | 'bidder')}
-                  className="mt-1 mr-3 text-teal-600 focus:ring-teal-600"
-                  disabled={loading}
-                />
-                <div className="flex-1">
-                  <div className="font-semibold text-gray-900">PPIS Subscriber</div>
-                  <div className="text-sm text-gray-600 mt-1">
-                    Full access to all restricted pages including upstream maps, activities, data review, and bidding blocks.
-                  </div>
-                </div>
-              </label>
-              
-              <label className="flex items-start p-3 border-2 rounded-lg cursor-pointer transition-all hover:bg-blue-100"
-                style={{ borderColor: accountType === 'bidder' ? '#0d9488' : '#e5e7eb' }}>
-                <input
-                  type="radio"
-                  name="accountType"
-                  value="bidder"
-                  checked={accountType === 'bidder'}
-                  onChange={(e) => setAccountType(e.target.value as 'company' | 'bidder')}
-                  className="mt-1 mr-3 text-teal-600 focus:ring-teal-600"
-                  disabled={loading}
-                />
-                <div className="flex-1">
-                  <div className="font-semibold text-gray-900">Bidder Access</div>
-                  <div className="text-sm text-gray-600 mt-1">
-                    Access to bidding blocks page and public pages only. Perfect for companies who want to purchase bidding documents.
-                  </div>
-                </div>
-              </label>
-            </div>
-          </div>
-
-          <div className="relative">
-            <label htmlFor="companyName" className="block text-sm font-medium text-gray-700 mb-1">
-              Company Name <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <input
-                id="companyName"
-                ref={companyInputRef}
-                type="text"
-                value={companyName}
-                onChange={handleCompanyNameChange}
-                onFocus={handleCompanyNameFocus}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent"
-                placeholder="Select or enter your company name"
-                required
-                disabled={loading}
-                autoComplete="off"
-              />
-              {showCompanyDropdown && filteredCompanies.length > 0 && (
-                <div
-                  ref={companyDropdownRef}
-                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
-                >
-                  {filteredCompanies.map((company, index) => (
-                    <button
-                      key={index}
-                      type="button"
-                      onClick={() => handleCompanySelect(company)}
-                      className="w-full text-left px-4 py-2 hover:bg-teal-600 hover:text-white transition-colors cursor-pointer first:rounded-t-lg last:rounded-b-lg"
-                    >
-                      {company}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <p className="text-xs text-gray-500 mt-1">
-              Select from the list or type to search. You can also enter a custom company name.
-            </p>
-          </div>
+          <CompanyNameAutocomplete
+            value={companyName}
+            onChange={setCompanyName}
+            disabled={loading}
+            label="Company name"
+            helperText="Select from the list or type to search. You can also enter a custom company name."
+          />
 
           <div>
             <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
@@ -525,7 +385,7 @@ export default function OnboardingPage() {
           </button>
 
           <p className="text-xs text-center text-gray-500">
-            After completing your profile, an admin will review your account before granting full access.
+            After you submit, you can use the bidding portal right away.
           </p>
         </form>
       </div>

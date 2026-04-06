@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useAuth } from '../lib/auth'
@@ -157,14 +158,9 @@ function LoginContent() {
             </p>
             <p className="text-sm text-gray-600">
               Don&apos;t have an account?{' '}
-              <a
-                href="https://ppisonline.com/signup"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-teal-600 hover:text-teal-700 font-medium"
-              >
-                Sign Up
-              </a>
+              <Link href="/signup" className="text-teal-600 hover:text-teal-700 font-medium">
+                Create account
+              </Link>
             </p>
           </div>
         </div>

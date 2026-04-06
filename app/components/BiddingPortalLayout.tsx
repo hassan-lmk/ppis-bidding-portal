@@ -131,33 +131,52 @@ export default function BiddingPortalLayout({
   }
 
   const fetchCounts = async () => {
-    try {
-      // Count open blocks
-      const { count: openCount } = await supabase
-        .from('areas')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'Open')
+    const userId = user?.id
+    if (!userId) return
 
-      // Count purchased areas available for submission (excluding submitted bids)
-      // Get all purchased area IDs
-      const { data: purchasedData } = await supabase
-        .from('area_downloads')
-        .select('area_id')
-        .eq('user_id', user?.id)
-        .eq('payment_status', 'completed')
+    try {
+      const [
+        { count: openCount },
+        { data: purchasedData },
+        { count: submittedCount },
+        { count: ticketsCount },
+        { count: paymentsCount },
+      ] = await Promise.all([
+        supabase
+          .from('areas')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'Open'),
+        supabase
+          .from('area_downloads')
+          .select('area_id')
+          .eq('user_id', userId)
+          .eq('payment_status', 'completed'),
+        supabase
+          .from('bid_applications')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .in('status', ['submitted', 'under_review', 'approved']),
+        supabase
+          .from('support_tickets')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .neq('status', 'closed'),
+        supabase
+          .from('bid_applications')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .in('application_fee_status', ['paid', 'verified']),
+      ])
 
       let availableForSubmissionCount = 0
       if (purchasedData && purchasedData.length > 0) {
         const purchasedAreaIds = purchasedData.map((d: any) => d.area_id)
-        
-        // Get bid applications for these purchased areas
         const { data: bidApps } = await supabase
           .from('bid_applications')
           .select('area_id, status')
-          .eq('user_id', user?.id)
+          .eq('user_id', userId)
           .in('area_id', purchasedAreaIds)
 
-        // Create a map of area_id to bid status
         const areaBidStatusMap: Record<string, string> = {}
         if (bidApps) {
           bidApps.forEach((app: any) => {
@@ -165,40 +184,18 @@ export default function BiddingPortalLayout({
           })
         }
 
-        // Count purchased areas where there's no bid app or status is 'draft'
         availableForSubmissionCount = purchasedAreaIds.filter((areaId: string) => {
           const bidStatus = areaBidStatusMap[areaId]
           return !bidStatus || bidStatus === 'draft'
         }).length
       }
 
-      // Count submitted applications
-      const { count: submittedCount } = await supabase
-        .from('bid_applications')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user?.id)
-        .in('status', ['submitted', 'under_review', 'approved'])
-
-      // Count open tickets
-      const { count: ticketsCount } = await supabase
-        .from('support_tickets')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user?.id)
-        .neq('status', 'closed')
-
-      // Count payments (bid applications with paid fees)
-      const { count: paymentsCount } = await supabase
-        .from('bid_applications')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user?.id)
-        .in('application_fee_status', ['paid', 'verified'])
-
       setCounts({
         openBlocks: openCount || 0,
         purchased: availableForSubmissionCount,
         submitted: submittedCount || 0,
         tickets: ticketsCount || 0,
-        payments: paymentsCount || 0
+        payments: paymentsCount || 0,
       })
     } catch (err) {
       console.error('Error fetching counts:', err)

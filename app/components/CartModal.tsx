@@ -8,6 +8,9 @@ import { X, ShoppingCart, Trash2, CreditCard, User, LogIn, Mail, Wallet, Buildin
 import { useCart } from '../lib/cart-context'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
+import { businessEmailErrorMessage, isBusinessEmail } from '../lib/business-email'
+import { PASSWORD_MAX_LENGTH, passwordMeetsPolicy, passwordPolicyErrorMessage } from '../lib/password-policy'
+import PasswordRequirements from './PasswordRequirements'
 // import { purchaseArea } from '../lib/bidding-api'
 const BACKEND_URL = ''
 
@@ -46,24 +49,17 @@ export default function CartModal({ isOpen, onClose, onPaymentSuccess }: CartMod
       try {
         const { data: profile } = await supabase
           .from('user_profiles')
-          .select('onboarding_completed, user_type, status, admin_approved')
+          .select('onboarding_completed, user_type, status')
           .eq('id', user.id)
           .single()
         
         if (profile) {
           // If onboarding not completed, redirect to onboarding page (not in cart)
-          if (!profile.onboarding_completed) {
-            // User needs to complete onboarding first
+          if (profile.onboarding_completed !== true) {
             router.push('/onboarding')
             return
-          } else if (profile.onboarding_completed && profile.admin_approved) {
-            // Ready for payment (only if approved)
-            setCurrentStep('payment')
-          } else {
-            // Onboarding completed but not approved yet
-            alert('Your account is pending admin approval. Please wait for approval before making purchases.')
-            onClose()
           }
+          setCurrentStep('payment')
         } else {
           // No profile yet, show auth
           setCurrentStep('auth')
@@ -85,7 +81,15 @@ export default function CartModal({ isOpen, onClose, onPaymentSuccess }: CartMod
       alert('Passwords do not match.')
       return
     }
-    
+    if (!isBusinessEmail(formData.email)) {
+      alert(businessEmailErrorMessage())
+      return
+    }
+    if (!passwordMeetsPolicy(formData.password)) {
+      alert(passwordPolicyErrorMessage())
+      return
+    }
+
     setProcessing(true)
     try {
       // Sign up - user_type will be set during onboarding
@@ -198,21 +202,13 @@ export default function CartModal({ isOpen, onClose, onPaymentSuccess }: CartMod
       // Check onboarding and approval status
       const { data: profile } = await supabase
         .from('user_profiles')
-        .select('onboarding_completed, user_type, admin_approved, status')
+        .select('onboarding_completed, user_type, status')
         .eq('id', userId)
         .single()
       
-      // If not onboarded, redirect to onboarding page
-      if (!profile?.onboarding_completed) {
+      if (profile?.onboarding_completed !== true) {
         alert('Please complete your profile onboarding first.')
         router.push('/onboarding')
-        setProcessing(false)
-        return
-      }
-      
-      // If not approved, show message
-      if (!profile?.admin_approved) {
-        alert('Your account is pending admin approval. Please wait for approval before making purchases.')
         setProcessing(false)
         return
       }
@@ -425,13 +421,26 @@ export default function CartModal({ isOpen, onClose, onPaymentSuccess }: CartMod
                         <input
                           type="password"
                           value={formData.password}
-                          onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                          onChange={(e) =>
+                            setFormData(prev => ({
+                              ...prev,
+                              password: isLoginMode
+                                ? e.target.value
+                                : e.target.value.slice(0, PASSWORD_MAX_LENGTH),
+                            }))
+                          }
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-600 focus:border-transparent"
-                          placeholder={isLoginMode ? "Enter your password" : "Create a password (min 6 characters)"}
+                          placeholder={
+                            isLoginMode ? 'Enter your password' : 'Create a strong password'
+                          }
                           required
-                          minLength={6}
+                          maxLength={isLoginMode ? undefined : PASSWORD_MAX_LENGTH}
                         />
                       </div>
+
+                      {!isLoginMode && (
+                        <PasswordRequirements password={formData.password} className="pl-0.5" />
+                      )}
 
                       {/* Confirm Password - Only for signup */}
                       {!isLoginMode && (
@@ -442,11 +451,16 @@ export default function CartModal({ isOpen, onClose, onPaymentSuccess }: CartMod
                           <input
                             type="password"
                             value={formData.confirmPassword}
-                            onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                            onChange={(e) =>
+                              setFormData(prev => ({
+                                ...prev,
+                                confirmPassword: e.target.value.slice(0, PASSWORD_MAX_LENGTH),
+                              }))
+                            }
                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-600 focus:border-transparent"
                             placeholder="Confirm your password"
                             required
-                            minLength={6}
+                            maxLength={PASSWORD_MAX_LENGTH}
                           />
                         </div>
                       )}
@@ -559,7 +573,14 @@ export default function CartModal({ isOpen, onClose, onPaymentSuccess }: CartMod
                   </button>
                   <button
                     type="submit"
-                    disabled={processing}
+                    disabled={
+                      processing ||
+                      (!user &&
+                        currentStep === 'auth' &&
+                        !isLoginMode &&
+                        (!passwordMeetsPolicy(formData.password) ||
+                          formData.password !== formData.confirmPassword))
+                    }
                     className="flex items-center px-6 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {processing ? (

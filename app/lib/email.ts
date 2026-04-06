@@ -466,12 +466,12 @@ ${STANDARD_TEXT_FOOTER}
   return { subject, html, text }
 }
 
-// Template for user - onboarding completed (waiting for admin approval)
+// Template for user - onboarding completed (immediate portal access)
 export function getOnboardingCompletedUserTemplate(userName: string, companyName: string, address: string, contactNumber: string) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://ppis.com'
   
   return {
-    subject: 'Profile Submitted - Awaiting Admin Approval',
+    subject: 'Profile complete — welcome to the Bidding Portal',
     html: `
 <!DOCTYPE html>
 <html>
@@ -495,7 +495,7 @@ export function getOnboardingCompletedUserTemplate(userName: string, companyName
               </p>
               
               <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #333333;">
-                Thank you for completing your profile! We have received your company information and it is now awaiting admin approval.
+                Thank you for completing your profile. Your bidder account is active — you can sign in and use the Bidding Portal right away.
               </p>
               
               <div style="background-color: #e6f7f5; border-left: 4px solid #2CBCA6; padding: 15px 20px; margin: 0 0 30px;">
@@ -513,19 +513,11 @@ export function getOnboardingCompletedUserTemplate(userName: string, companyName
                 </p>
               </div>
               
-              <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #333333;">
-                Our admin team will review your profile and notify you once your account has been approved. This typically takes 1-2 business days.
-              </p>
-              
-              <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #333333;">
-                In the meantime, you can check your approval status at:
-              </p>
-              
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                 <tr>
                   <td style="text-align: center; padding: 20px 0;">
-                    <a href="${siteUrl}/pending-approval" style="display: inline-block; padding: 15px 40px; background-color: #2CBCA6; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
-                      Check Approval Status
+                    <a href="${siteUrl}/bidding-portal" style="display: inline-block; padding: 15px 40px; background-color: #2CBCA6; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
+                      Open Bidding Portal
                     </a>
                   </td>
                 </tr>
@@ -555,16 +547,14 @@ Profile Submitted Successfully
 
 Dear ${userName},
 
-Thank you for completing your profile! We have received your company information and it is now awaiting admin approval.
+Thank you for completing your profile. Your bidder account is active — you can use the Bidding Portal right away.
 
 Your Submitted Information:
 - Company: ${companyName}
 - Address: ${address}
 - Contact: ${contactNumber}
 
-Our admin team will review your profile and notify you once your account has been approved. This typically takes 1-2 business days.
-
-Check your approval status: ${siteUrl}/pending-approval
+Open the portal: ${siteUrl}/bidding-portal
 
 If you have any questions, please contact our support team.
 
@@ -576,26 +566,26 @@ ${STANDARD_TEXT_FOOTER}
   }
 }
 
-// Template for admin - new company needs approval
+// Template for admin - new bidder completed onboarding (FYI)
 export function getOnboardingCompletedAdminTemplate(userName: string, userEmail: string, companyName: string, address: string, contactNumber: string) {
   const adminDashboardUrl = process.env.NEXT_PUBLIC_SITE_URL ? `${process.env.NEXT_PUBLIC_SITE_URL}/admin/users` : 'https://ppis.com/admin/users'
   
   return {
-    subject: 'New Company Profile Pending Approval',
+    subject: 'New bidder completed onboarding',
     html: `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>New Profile Pending Approval</title>
+  <title>New bidder registration</title>
 </head>
 <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4;">
   <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f4f4f4;">
     <tr>
       <td style="padding: 40px 20px;">
         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-          ${getStandardEmailHeader('New Profile Pending Approval')}
+          ${getStandardEmailHeader('New bidder registration')}
           
           <!-- Content -->
           <tr>
@@ -605,10 +595,10 @@ export function getOnboardingCompletedAdminTemplate(userName: string, userEmail:
               </p>
               
               <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #333333;">
-                A new company has completed their onboarding and is waiting for your approval.
+                A new bidder has completed onboarding and has access to the Bidding Portal. Details below for your records.
               </p>
               
-              <div style="background-color: #fff7ed; border: 2px solid #f59e0b; border-radius: 8px; padding: 20px; margin: 0 0 30px;">
+              <div style="background-color: #e6f7f5; border: 2px solid #2CBCA6; border-radius: 8px; padding: 20px; margin: 0 0 30px;">
                 <p style="margin: 0 0 15px; font-size: 15px; font-weight: 600; color: #333333;">
                   Company Details:
                 </p>
@@ -629,15 +619,11 @@ export function getOnboardingCompletedAdminTemplate(userName: string, userEmail:
                 </p>
               </div>
               
-              <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #333333;">
-                Please review the profile and approve or reject it from the admin dashboard.
-              </p>
-              
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                 <tr>
                   <td style="text-align: center; padding: 20px 0;">
-                    <a href="${adminDashboardUrl}" style="display: inline-block; padding: 15px 40px; background-color: #f59e0b; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
-                      Review & Approve Now
+                    <a href="${adminDashboardUrl}" style="display: inline-block; padding: 15px 40px; background-color: #2CBCA6; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
+                      Open admin dashboard
                     </a>
                   </td>
                 </tr>
@@ -659,11 +645,11 @@ export function getOnboardingCompletedAdminTemplate(userName: string, userEmail:
 </html>
     `,
     text: `
-New Profile Pending Approval
+New bidder completed onboarding
 
 Hello Admin,
 
-A new company has completed their onboarding and is waiting for your approval.
+A new bidder has completed onboarding and has portal access. Details for your records:
 
 Company Details:
 - Contact Name: ${userName}
@@ -672,9 +658,7 @@ Company Details:
 - Address: ${address}
 - Contact Number: ${contactNumber}
 
-Please review the profile and approve or reject it from the admin dashboard.
-
-Review & Approve Now: ${adminDashboardUrl}
+Admin dashboard: ${adminDashboardUrl}
 
 Best regards,
 PPIS System
@@ -889,7 +873,7 @@ export function getPurchaseConfirmationEmailTemplate(
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                 <tr>
                   <td style="text-align: center; padding: 20px 0;">
-                    <a href="${siteUrl}/bidding-blocks" style="display: inline-block; padding: 15px 40px; background-color: #2CBCA6; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
+                    <a href="${siteUrl}/bidding-portal?tab=purchased-documents" style="display: inline-block; padding: 15px 40px; background-color: #2CBCA6; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
                       View & Download Documents
                     </a>
                   </td>
@@ -934,7 +918,7 @@ Total: ${formattedAmount}
 
 You can now access and download your purchased documents from your account dashboard.
 
-View & Download Documents: ${siteUrl}/bidding-blocks
+View & Download Documents: ${siteUrl}/bidding-portal?tab=purchased-documents
 
 If you have any questions about your purchase, please don't hesitate to contact our support team.
 

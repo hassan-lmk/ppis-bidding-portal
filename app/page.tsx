@@ -1,93 +1,75 @@
 'use client'
 
-import dynamic from 'next/dynamic'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Loader2 } from 'lucide-react'
-import { useAuth } from './lib/auth'
+import PublicSiteHeader from './components/PublicSiteHeader'
 import { Button } from './components/ui/button'
 
-const InteractiveMapLanding = dynamic(
-  () => import('./components/InteractiveMapPortal'),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="min-h-[70vh] rounded-xl bg-gray-100 flex items-center justify-center border border-gray-200">
-        <Loader2 className="w-10 h-10 animate-spin text-teal-600" />
-      </div>
-    ),
-  },
-)
-
-const SIGNUP_URL = 'https://ppisonline.com/signup'
+/** Hero fills viewport; navigation sits inside on a transparent bar */
+const HERO_BG = '/images/Gemini_Generated_Image_6bkbzd6bkbzd6bkb.webp'
 
 export default function HomePage() {
-  const { user, loading: authLoading } = useAuth()
-
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      <header className="sticky top-0 z-50 border-b border-gray-200/80 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
-        <div className="max-w-7xl mx-auto px-4 lg:px-6 h-14 flex items-center justify-between gap-4">
-          <Link href="/" className="flex items-center gap-2 shrink-0">
-            <Image
-              src="/images/PPIS-logo-bg.png"
-              alt="PPIS"
-              width={120}
-              height={40}
-              className="h-9 w-auto"
-              priority
-            />
-          </Link>
-
-          <nav className="flex items-center gap-2 sm:gap-3">
-            {!authLoading && user && (
-              <Button variant="ghost" size="sm" className="text-teal-800" asChild>
-                <Link href="/bidding-portal">My portal</Link>
-              </Button>
-            )}
-            <Button variant="outline" size="sm" className="border-teal-300 text-teal-800" asChild>
-              <Link href="/login">Sign in</Link>
-            </Button>
-            <Button size="sm" className="bg-teal-600 hover:bg-teal-700 text-white" asChild>
-              <a href={SIGNUP_URL} target="_blank" rel="noopener noreferrer">
-                Create bidder account
-              </a>
-            </Button>
-          </nav>
-        </div>
-      </header>
-
-      <section className="relative w-full min-h-[240px] sm:min-h-[280px] md:min-h-[320px]">
+    <div className="min-h-screen flex flex-col bg-gray-950">
+      <section className="relative min-h-screen flex flex-col overflow-x-hidden">
         <Image
-          src="/images/Banner-2.png"
+          src={HERO_BG}
           alt=""
           fill
           priority
           className="object-cover"
           sizes="100vw"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/45 to-black/30" aria-hidden />
-        <div className="relative z-10 max-w-7xl mx-auto px-4 lg:px-6 py-14 md:py-20">
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white tracking-tight drop-shadow-sm">
-            Bidding Portal
-          </h1>
-          <p className="mt-3 max-w-2xl text-base sm:text-lg text-white/90">
-            Explore open petroleum blocks on the map. Download block brochures at no cost, or purchase bidding
-            documents to proceed to secure checkout via PayFast.
-          </p>
-        </div>
-      </section>
+        <div className="absolute inset-0 bg-black/45 pointer-events-none" aria-hidden />
+        <div
+          className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/30 via-[30%] to-transparent to-[48%] pointer-events-none"
+          aria-hidden
+        />
 
-      <section className="flex-1 max-w-7xl mx-auto px-4 lg:px-6 py-6 lg:py-8 w-full">
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-          <div className="border-b border-gray-100 px-4 py-3 bg-gray-50/80">
-            <h2 className="text-sm font-semibold text-gray-800">Interactive map — open bidding blocks</h2>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Click a block to view details, download the brochure, or buy bidding documents.
-            </p>
-          </div>
-          <div className="p-2 sm:p-3">
-            <InteractiveMapLanding variant="landing" openBlocksOnly />
+        <PublicSiteHeader variant="heroOverlay" />
+
+        <div className="relative z-10 flex-1 flex w-full min-h-0 pb-6 lg:pb-0">
+          <div className="w-full flex flex-col lg:flex-row lg:items-stretch flex-1 min-h-[calc(100dvh-3.5rem)]">
+            <div className="px-4 sm:px-6 lg:pl-6 lg:pr-8 xl:pl-8 flex flex-col justify-center shrink-0 py-8 md:py-10 lg:py-0 lg:w-[min(100%,28rem)] xl:w-[min(100%,32rem)]">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-5xl xl:text-6xl font-bold text-white tracking-tight drop-shadow-sm text-center lg:text-left">
+                Bidding Portal
+              </h1>
+              <p className="mt-4 max-w-2xl mx-auto lg:mx-0 text-base sm:text-lg text-white/90 text-center lg:text-left">
+                Manage open blocks, documents, and bids in one place — built for Pakistan&apos;s petroleum
+                exploration community.
+              </p>
+              <div className="mt-8 flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 justify-center lg:justify-start">
+                <Button
+                  size="lg"
+                  className="bg-teal-600 hover:bg-teal-700 text-white shadow-lg w-full sm:w-auto min-w-[200px]"
+                  asChild
+                >
+                  <Link href="/signup">Create bidder account</Link>
+                </Button>
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  className="bg-white/95 text-teal-900 hover:bg-white shadow-lg w-full sm:w-auto min-w-[200px]"
+                  asChild
+                >
+                  <Link href="/login">Login</Link>
+                </Button>
+              </div>
+            </div>
+
+            <div
+              className="relative flex-1 flex items-end lg:items-center justify-end min-h-[200px] lg:min-h-0 pr-0 mr-0 w-full lg:w-auto shrink lg:grow"
+            >
+              <Image
+                src="/images/918shots_so.png"
+                alt="PPIS Bidding Portal dashboard preview showing sidebar navigation and interactive map"
+                width={1920}
+                height={1440}
+                className="w-auto h-auto max-h-[min(52vh,calc(100dvh-8rem))] sm:max-h-[min(60vh,calc(100dvh-6rem))] lg:max-h-[calc(100dvh-3.5rem)] max-w-none object-contain object-right ml-auto"
+                sizes="(max-width: 1024px) 100vw, 65vw"
+                quality={90}
+              />
+            </div>
           </div>
         </div>
       </section>

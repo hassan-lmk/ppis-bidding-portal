@@ -25,7 +25,12 @@ interface AuthContextType {
   userProfile: UserProfile | null
   mustChangePassword: boolean
   checkPasswordChangeRequired: () => Promise<void>
-  signUp: (email: string, password: string, fullName?: string) => Promise<{ error: any }>
+  signUp: (
+    email: string,
+    password: string,
+    fullName?: string,
+    companyName?: string,
+  ) => Promise<{ error: any }>
   signIn: (identifier: string, password: string) => Promise<{ error: any }>
   signOut: () => Promise<{ error: any }>
   resetPassword: (email: string) => Promise<{ error: any }>
@@ -450,7 +455,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isInitialized, cacheLoaded])
 
-  const signUp = async (email: string, password: string, fullName?: string) => {
+  const signUp = async (
+    email: string,
+    password: string,
+    fullName?: string,
+    companyName?: string,
+  ) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -458,8 +468,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         data: {
           full_name: fullName || '',
           display_name: fullName || '', // This shows in Supabase dashboard
-        }
-      }
+          company_name: companyName?.trim() || '',
+        },
+      },
     })
 
     return { error }

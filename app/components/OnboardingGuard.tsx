@@ -11,9 +11,8 @@ interface OnboardingGuardProps {
 }
 
 /**
- * OnboardingGuard - Checks if user has completed onboarding and is approved
- * Redirects to onboarding or pending-approval pages if needed
- * Excludes onboarding and pending-approval pages from checks
+ * Portal access rule: user may use the bidding portal only when
+ * `user_profiles.onboarding_completed` is true. No admin approval check.
  */
 export default function OnboardingGuard({ children }: OnboardingGuardProps) {
   const { user, loading: authLoading, userProfile, adminChecked } = useAuth()
@@ -23,67 +22,53 @@ export default function OnboardingGuard({ children }: OnboardingGuardProps) {
 
   useEffect(() => {
     const checkOnboardingStatus = async () => {
-      // Skip check if we're on onboarding or pending-approval pages
       if (pathname === '/onboarding' || pathname === '/pending-approval') {
         setChecking(false)
         return
       }
 
-      // Wait for auth to finish loading and profile to be loaded
       if (authLoading || !adminChecked) return
-      
+
       if (!user) {
-        // Not logged in - let the auth guard handle it
         setChecking(false)
         return
       }
 
       try {
-        // Use cached profile if available, otherwise fetch from database
         let profile = userProfile
-        
+
         if (!profile) {
-          console.log('Profile not cached, fetching from database...')
           const { data, error } = await supabase
             .from('user_profiles')
-            .select('onboarding_completed, admin_approved, status')
+            .select('onboarding_completed, status')
             .eq('id', user.id)
             .single()
 
           if (error) {
             console.error('Error checking profile:', error)
-            setChecking(false)
+            router.replace('/onboarding')
             return
           }
           profile = data
         }
 
-        // Check onboarding status
-        if (!profile?.onboarding_completed) {
-          // Redirect to onboarding page
+        const onboardingDone = profile?.onboarding_completed === true
+
+        if (!onboardingDone) {
           router.replace('/onboarding')
           return
         }
 
-        // Check approval status
-        if (!profile.admin_approved) {
-          // Redirect to pending approval page
-          router.replace('/pending-approval')
-          return
-        }
-
-        // User is approved, allow access
         setChecking(false)
       } catch (err) {
         console.error('Error checking onboarding status:', err)
-        setChecking(false)
+        router.replace('/onboarding')
       }
     }
 
     checkOnboardingStatus()
   }, [user, authLoading, userProfile, adminChecked, router, pathname])
 
-  // Show loading while checking
   if (checking || authLoading || !adminChecked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -95,11 +80,9 @@ export default function OnboardingGuard({ children }: OnboardingGuardProps) {
     )
   }
 
-  // If user is not logged in, let auth guard handle redirect
   if (!user) {
     return <>{children}</>
   }
 
-  // User is logged in and approved, show content
   return <>{children}</>
 }

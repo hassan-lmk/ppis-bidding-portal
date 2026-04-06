@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, Suspense, lazy } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense, lazy } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { useAuth } from '../lib/auth'
@@ -177,6 +177,8 @@ function BiddingPortalContent() {
   
   // Track which tabs have been loaded to avoid refetching
   const [loadedTabs, setLoadedTabs] = useState<Set<PortalTab>>(new Set())
+  /** Prevents duplicate in-flight fetches (e.g. Strict Mode or rapid effect re-runs) */
+  const tabFetchInFlightRef = useRef<Set<PortalTab>>(new Set())
   const [tabLoading, setTabLoading] = useState<Record<PortalTab, boolean>>({
     'opened-bidding': false,
     'purchased-documents': false,
@@ -283,12 +285,12 @@ function BiddingPortalContent() {
     return () => clearInterval(timer)
   }, [])
 
-  // Fetch bid submission closing date
+  // Fetch bid submission closing date (only when portal is confirmed open)
   useEffect(() => {
     let isMounted = true
     
     const fetchClosingDate = async () => {
-      if (!user) return
+      if (!user || portalEnabled !== true) return
       
       try {
         const token = await getAuthToken()
@@ -319,7 +321,7 @@ function BiddingPortalContent() {
     return () => {
       isMounted = false
     }
-  }, [user])
+  }, [user, portalEnabled])
 
   // Check if bidding portal is enabled - using cached status
   useEffect(() => {
@@ -354,32 +356,34 @@ function BiddingPortalContent() {
     }
   }, [])
 
+  // Auth redirect + load active tab once portal is known to be enabled (single effect — avoids duplicate fetchTabData)
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/login?redirect=/bidding-portal')
       return
     }
 
-    if (user && portalEnabled !== false) {
-      setLoading(false) // Initial loading complete
-      // Fetch data for the active tab only
-      fetchTabData(activeTab)
-    }
-  }, [user, authLoading, router, portalEnabled])
+    if (authLoading) return
 
-  // Fetch data when active tab changes
-  useEffect(() => {
-    if (user && portalEnabled !== false && activeTab) {
-      fetchTabData(activeTab)
+    if (portalEnabled === false) {
+      setLoading(false)
+      return
     }
-  }, [activeTab, user, portalEnabled])
+
+    if (portalEnabled !== true) {
+      return
+    }
+
+    setLoading(false)
+    void fetchTabData(activeTab)
+  }, [user, authLoading, router, portalEnabled, activeTab])
 
   // Fetch data for a specific tab
   const fetchTabData = async (tab: PortalTab) => {
-    // Skip if already loaded
-    if (loadedTabs.has(tab)) {
+    if (loadedTabs.has(tab) || tabFetchInFlightRef.current.has(tab)) {
       return
     }
+    tabFetchInFlightRef.current.add(tab)
 
     try {
       setTabLoading(prev => ({ ...prev, [tab]: true }))
@@ -414,6 +418,7 @@ function BiddingPortalContent() {
       }
       setError('An unexpected error occurred')
     } finally {
+      tabFetchInFlightRef.current.delete(tab)
       setTabLoading(prev => ({ ...prev, [tab]: false }))
     }
   }

@@ -43,7 +43,7 @@ export default function PendingApprovalPage() {
           profile = data
         }
 
-        if (!profile?.onboarding_completed) {
+        if (profile?.onboarding_completed !== true) {
           if (isMounted && !navigated) {
             router.replace('/onboarding')
             setNavigated(true)
@@ -51,21 +51,17 @@ export default function PendingApprovalPage() {
           return
         }
 
-        if (profile.admin_approved) {
-          if (isMounted && !navigated) {
-            router.replace('/bidding-portal')
-            setNavigated(true)
+        if (profile.status === 'rejected') {
+          if (isMounted) {
+            setStatus('rejected')
+            setRejectionReason(profile.rejection_reason ?? null)
           }
           return
         }
 
-        if (isMounted) {
-          if (profile.status === 'rejected') {
-            setStatus('rejected')
-            setRejectionReason(profile.rejection_reason ?? null)
-          } else {
-            setStatus('pending')
-          }
+        if (isMounted && !navigated) {
+          router.replace('/bidding-portal')
+          setNavigated(true)
         }
       } catch (err) {
         console.error('Error:', err)
