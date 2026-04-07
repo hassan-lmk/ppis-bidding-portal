@@ -213,7 +213,7 @@ export default function BiddingPortalLayout({
     },
     { 
       id: 'purchased-documents', 
-      label: 'Submitted Bid Application', 
+      label: 'Submit Bid Application', 
       icon: FileStack,
       href: '/bidding-portal?tab=purchased-documents',
       count: counts.purchased

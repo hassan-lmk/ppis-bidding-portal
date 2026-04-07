@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '../../../../../lib/supabase'
+import { createServiceRoleClient } from '../../../../_supabaseAdmin'
 import crypto from 'crypto'
 
 // Force dynamic to avoid build-time initialization issues
@@ -22,6 +22,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+  const supabase = createServiceRoleClient()
   const { id } = await params
   const { searchParams } = new URL(request.url)
     const basketId = searchParams.get('basket_id') || ''
@@ -45,14 +46,16 @@ export async function GET(
     })
 
   // Get the application
-  const { data: app } = await (supabaseAdmin as any)
+  const { data: app } = await supabase
     .from('bid_applications')
     .select('*')
     .eq('id', id)
     .maybeSingle()
 
   if (!app) {
-    return NextResponse.redirect(`${appBase}/bid-submission/${id}?payment=error&message=Application+not+found`)
+    return NextResponse.redirect(
+      `${appBase}/bidding-blocks/payfast-return?status=failed&basket_id=${encodeURIComponent(basketId)}&message=Application+not+found`
+    )
   }
 
     // Validate hash if present
@@ -103,7 +106,7 @@ export async function GET(
             // Collect all return parameters as raw_payload
             const rawPayload = Object.fromEntries(searchParams.entries())
             
-    await (supabaseAdmin as any)
+    await supabase
       .from('bid_applications')
       .update({
         application_fee_status: 'paid',
@@ -136,10 +139,10 @@ export async function GET(
       // Payment successful
     return NextResponse.redirect(`${appBase}/bid-submission/${app.area_id}?payment=success`)
   } else {
-    // Payment failed
+      // Payment failed: use same return page pattern as bidding document purchase
       const errorMessage = errMsg || 'Payment failed'
     return NextResponse.redirect(
-      `${appBase}/bid-submission/${app.area_id}?payment=failed&message=${encodeURIComponent(errorMessage)}`
+      `${appBase}/bidding-blocks/payfast-return?status=failed&basket_id=${encodeURIComponent(basketId)}&message=${encodeURIComponent(errorMessage)}`
     )
     }
   } catch (e: any) {
@@ -147,9 +150,9 @@ export async function GET(
     const appBase = process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || ''
     try {
       const { id } = await params
-      return NextResponse.redirect(`${appBase}/bid-submission/${id}?payment=error`)
+      return NextResponse.redirect(`${appBase}/bidding-blocks/payfast-return?status=failed&basket_id=${encodeURIComponent(id)}`)
     } catch {
-      return NextResponse.redirect(`${appBase}/bid-submission?payment=error`)
+      return NextResponse.redirect(`${appBase}/bidding-blocks/payfast-return?status=failed`)
     }
   }
 }
@@ -160,6 +163,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const supabase = createServiceRoleClient()
     const { id } = await params
     const formData = await request.formData()
     const errCode = (formData.get('err_code') as string) || ''
@@ -183,14 +187,16 @@ export async function POST(
     })
 
     // Get the application
-    const { data: app } = await (supabaseAdmin as any)
+    const { data: app } = await supabase
       .from('bid_applications')
       .select('*')
       .eq('id', id)
       .maybeSingle()
 
     if (!app) {
-      return NextResponse.redirect(`${appBase}/bid-submission/${id}?payment=error&message=Application+not+found`)
+      return NextResponse.redirect(
+        `${appBase}/bidding-blocks/payfast-return?status=failed&basket_id=${encodeURIComponent(basketId)}&message=Application+not+found`
+      )
     }
 
     // Validate hash if present
@@ -220,7 +226,7 @@ export async function POST(
             // Collect all form data as raw_payload
             const rawPayload = Object.fromEntries(formData.entries())
             
-      await (supabaseAdmin as any)
+      await supabase
         .from('bid_applications')
         .update({
           application_fee_status: 'paid',
@@ -243,7 +249,7 @@ export async function POST(
       return NextResponse.redirect(`${appBase}/bid-submission/${app.area_id}?payment=success`)
     } else {
       return NextResponse.redirect(
-        `${appBase}/bid-submission/${app.area_id}?payment=failed&message=${encodeURIComponent(errMsg || 'Payment failed')}`
+        `${appBase}/bidding-blocks/payfast-return?status=failed&basket_id=${encodeURIComponent(basketId)}&message=${encodeURIComponent(errMsg || 'Payment failed')}`
       )
     }
   } catch (error: any) {
@@ -251,9 +257,9 @@ export async function POST(
     const appBase = process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || ''
     try {
       const { id } = await params
-    return NextResponse.redirect(`${appBase}/bid-submission/${id}?payment=error`)
+    return NextResponse.redirect(`${appBase}/bidding-blocks/payfast-return?status=failed&basket_id=${encodeURIComponent(id)}`)
     } catch {
-      return NextResponse.redirect(`${appBase}/bid-submission?payment=error`)
+      return NextResponse.redirect(`${appBase}/bidding-blocks/payfast-return?status=failed`)
     }
   }
 }
