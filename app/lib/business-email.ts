@@ -58,10 +58,7 @@ function domainIsBlocked(domain: string): boolean {
   const d = domain.trim().toLowerCase()
   if (!d || !d.includes('.')) return true
   if (BLOCKED_EMAIL_DOMAINS.has(d)) return true
-  for (const blocked of BLOCKED_EMAIL_DOMAINS) {
-    if (d.endsWith(`.${blocked}`)) return true
-  }
-  return false
+  return Array.from(BLOCKED_EMAIL_DOMAINS).some((blocked) => d.endsWith(`.${blocked}`))
 }
 
 /**

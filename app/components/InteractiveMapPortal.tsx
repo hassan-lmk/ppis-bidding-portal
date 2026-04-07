@@ -33,12 +33,21 @@ interface Area {
 interface InteractiveMapPortalProps {
   openBlocksOnly?: boolean
   /** `landing` uses a taller map for the public home page */
-  variant?: 'embedded' | 'landing'
+  variant?: 'embedded' | 'landing' | 'compact' | 'split'
+  /** Optional controlled selected area id from parent */
+  selectedAreaId?: string | null
+  /** Notify parent when a block is selected on map */
+  onAreaSelect?: (areaId: string) => void
+  /** Hide in-map details card and let parent render selection UI */
+  hideDetailsPanel?: boolean
 }
 
 export default function InteractiveMapPortal({
   openBlocksOnly = true,
   variant = 'embedded',
+  selectedAreaId = null,
+  onAreaSelect,
+  hideDetailsPanel = false,
 }: InteractiveMapPortalProps) {
   const router = useRouter()
   const { addToCart } = useCart()
@@ -205,6 +214,7 @@ export default function InteractiveMapPortal({
 
             layer.on('click', () => {
               setSelectedArea(area)
+              onAreaSelect?.(area.id)
               
               // Highlight selected
               Object.values(layersRef.current).forEach((l: any) => {
@@ -212,10 +222,11 @@ export default function InteractiveMapPortal({
                   const areaId = Object.keys(layersRef.current).find(k => layersRef.current[k] === l)
                   const areaData = areas.find(a => a.id === areaId)
                   const isAreaPurchased = areaData ? purchasedAreaIds.has(areaData.id) : false
+                  const isControlledSelected = selectedAreaId === areaId
                   l.setStyle({
-                    fillColor: isAreaPurchased ? '#3B82F6' : '#10B981',
-                    fillOpacity: 0.4,
-                    weight: 2
+                    fillColor: isControlledSelected ? '#F59E0B' : (isAreaPurchased ? '#3B82F6' : '#10B981'),
+                    fillOpacity: isControlledSelected ? 0.7 : 0.4,
+                    weight: isControlledSelected ? 3 : 2
                   })
                 }
               })
@@ -243,6 +254,33 @@ export default function InteractiveMapPortal({
       mapInstanceRef.current.fitBounds(group.getBounds(), { padding: [50, 50] })
     }
   }, [areas, purchasedAreaIds])
+
+  // Keep map highlight in sync when parent controls selected block.
+  useEffect(() => {
+    if (!selectedAreaId || !layersRef.current[selectedAreaId]) return
+
+    Object.entries(layersRef.current).forEach(([areaId, layer]) => {
+      const areaData = areas.find(a => a.id === areaId)
+      const isAreaPurchased = areaData ? purchasedAreaIds.has(areaData.id) : false
+      const isSelected = areaId === selectedAreaId
+      if ((layer as any).setStyle) {
+        ;(layer as any).setStyle({
+          fillColor: isSelected ? '#F59E0B' : (isAreaPurchased ? '#3B82F6' : '#10B981'),
+          fillOpacity: isSelected ? 0.7 : 0.4,
+          weight: isSelected ? 3 : 2,
+        })
+      }
+    })
+
+    // Zoom to selected block when selection is controlled by parent (list click).
+    const selectedLayer = layersRef.current[selectedAreaId] as any
+    if (selectedLayer?.getBounds && mapInstanceRef.current) {
+      mapInstanceRef.current.fitBounds(selectedLayer.getBounds(), {
+        padding: [60, 60],
+        maxZoom: 9,
+      })
+    }
+  }, [selectedAreaId, areas, purchasedAreaIds])
 
   // Separate useEffect for province boundaries layer
   useEffect(() => {
@@ -340,7 +378,11 @@ export default function InteractiveMapPortal({
   const mapHeightClass =
     variant === 'landing'
       ? 'min-h-[70vh] h-[min(90vh,920px)] md:min-h-[75vh]'
-      : 'h-[700px]'
+      : variant === 'compact'
+        ? 'h-[min(52vh,520px)] min-h-[380px]'
+        : variant === 'split'
+          ? 'h-full min-h-0'
+        : 'h-[calc(100vh-8.5rem)] min-h-[700px]'
 
   if (loading) {
     return (
@@ -380,47 +422,47 @@ export default function InteractiveMapPortal({
       </div>
 
       {/* Selected Area Panel */}
-      {selectedArea && (
+      {selectedArea && !hideDetailsPanel && (
         <div className="absolute bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 z-[1000]">
-          <Card className="shadow-xl">
+          <Card className="shadow-xl bg-[#317070] text-white border-white/10">
             <CardContent className="p-4">
               <div className="flex items-start justify-between mb-3">
                 <div>
-                  <h3 className="font-bold text-gray-900">{selectedArea.name}</h3>
-                  <p className="text-sm text-gray-500">{selectedArea.code}</p>
+                  <h3 className="font-bold text-white">{selectedArea.name}</h3>
+                  <p className="text-sm text-white/80">{selectedArea.code}</p>
                 </div>
                 <button
                   onClick={() => setSelectedArea(null)}
-                  className="p-1 hover:bg-gray-100 rounded"
+                  className="p-1 hover:bg-white/10 rounded"
                 >
-                  <X className="w-4 h-4 text-gray-400" />
+                  <X className="w-4 h-4 text-white/80" />
                 </button>
               </div>
 
               <div className="flex items-center space-x-2 mb-3">
-                <Badge className="bg-emerald-50 text-emerald-700">Open</Badge>
+                <Badge className="bg-white/15 text-white border border-white/20">Open</Badge>
                 {purchasedAreaIds.has(selectedArea.id) && (
-                  <Badge className="bg-blue-50 text-blue-700">Purchased</Badge>
+                  <Badge className="bg-white/15 text-white border border-white/20">Purchased</Badge>
                 )}
               </div>
 
               <div className="space-y-2 text-sm mb-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-500">Zone</span>
-                  <span className="font-medium">{selectedArea.zone_name}</span>
+                  <span className="text-white/80">Zone</span>
+                  <span className="font-medium text-white">{selectedArea.zone_name}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-500">Block</span>
-                  <span className="font-medium">{selectedArea.block_name}</span>
+                  <span className="text-white/80">Block</span>
+                  <span className="font-medium text-white">{selectedArea.block_name}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-500">Type</span>
-                  <span className="font-medium capitalize">{selectedArea.block_type}</span>
+                  <span className="text-white/80">Type</span>
+                  <span className="font-medium text-white capitalize">{selectedArea.block_type}</span>
                 </div>
                 {selectedArea.bid_submission_deadline && (
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-500">Deadline</span>
-                    <span className="font-medium text-amber-600">
+                    <span className="text-white/80">Deadline</span>
+                    <span className="font-medium text-amber-200">
                       {formatDate(selectedArea.bid_submission_deadline)}
                     </span>
                   </div>
@@ -429,7 +471,11 @@ export default function InteractiveMapPortal({
 
               <div className="flex flex-col gap-2">
                 {getBrochureHref(selectedArea.brochure_url) && (
-                  <Button variant="outline" className="w-full border-teal-200 text-teal-800" asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full border-white/40 bg-white/10 text-white hover:bg-white/15 hover:text-white"
+                    asChild
+                  >
                     <a
                       href={getBrochureHref(selectedArea.brochure_url)!}
                       target="_blank"
@@ -444,7 +490,7 @@ export default function InteractiveMapPortal({
                 {purchasedAreaIds.has(selectedArea.id) ? (
                   <Button
                     onClick={() => router.push(`/bid-submission/${selectedArea.id}`)}
-                    className="w-full bg-teal-600 hover:bg-teal-700"
+                    className="w-full bg-white text-[#317070] hover:bg-white/90"
                   >
                     <FileCheck className="w-4 h-4 mr-2" />
                     Apply for bidding
@@ -452,7 +498,7 @@ export default function InteractiveMapPortal({
                 ) : (
                   <Button
                     onClick={handlePurchaseDocuments}
-                    className="w-full bg-teal-600 hover:bg-teal-700"
+                    className="w-full bg-white text-[#317070] hover:bg-white/90"
                   >
                     <CreditCard className="w-4 h-4 mr-2" />
                     Buy bidding documents — PayFast ({formatPrice(selectedArea.price)})

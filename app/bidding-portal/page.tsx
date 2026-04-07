@@ -16,6 +16,8 @@ import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Textarea } from '../components/ui/textarea'
 import { Skeleton } from '../components/ui/skeleton'
+import PasswordRequirements from '../components/PasswordRequirements'
+import { passwordMeetsPolicy, passwordPolicyErrorMessage } from '../lib/password-policy'
 import {
   Download,
   AlertCircle,
@@ -156,12 +158,18 @@ interface ApplicationFeePayment {
   payment_raw_payload?: any // JSONB field containing PayFast response
 }
 
+interface PortalProfileData {
+  company_name: string | null
+  address: string | null
+  poc_contact_number: string | null
+}
+
 function BiddingPortalContent() {
   const searchParams = useSearchParams()
   const tabParam = searchParams.get('tab') as PortalTab | null
   const [activeTab, setActiveTab] = useState<PortalTab>(tabParam || 'opened-bidding')
   const [openBlocks, setOpenBlocks] = useState<OpenBlock[]>([])
-  const [openBlocksView, setOpenBlocksView] = useState<'open' | 'purchased'>('open')
+  const [selectedOpenedBlockId, setSelectedOpenedBlockId] = useState<string | null>(null)
   const [purchasedAreas, setPurchasedAreas] = useState<PurchasedArea[]>([])
   const [submittedApps, setSubmittedApps] = useState<SubmittedApplication[]>([])
   const [tickets, setTickets] = useState<Ticket[]>([])
@@ -185,15 +193,21 @@ function BiddingPortalContent() {
     'submitted-applications': false,
     'support': false,
     'payments': false,
+    'profile': false,
     'interactive-map': false,
-    'bid-submission': false,
-    'submit-bids': false
+    'bid-submission': false
   })
   
   // Ticket creation
   const [showNewTicket, setShowNewTicket] = useState(false)
   const [newTicket, setNewTicket] = useState({ subject: '', description: '', category: 'general' })
   const [creatingTicket, setCreatingTicket] = useState(false)
+  const [profileData, setProfileData] = useState<PortalProfileData | null>(null)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [updatingPassword, setUpdatingPassword] = useState(false)
+  const [passwordCardOpen, setPasswordCardOpen] = useState(false)
+  const [passwordStatus, setPasswordStatus] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
   
   // Cart state
   const [cartModalOpen, setCartModalOpen] = useState(false)
@@ -201,7 +215,7 @@ function BiddingPortalContent() {
   const [cartHovered, setCartHovered] = useState(false)
   
   const { user, loading: authLoading, session, userProfile } = useAuth()
-  const { addToCart, isInCart, getTotalItems } = useCart()
+  const { addToCart, removeFromCart, isInCart, getTotalItems, getTotalPrice, items } = useCart()
   const router = useRouter()
 
   // Helper function to get auth token - redirects to login if session expired
@@ -403,6 +417,9 @@ function BiddingPortalContent() {
           break
         case 'payments':
           await fetchPaymentsData()
+          break
+        case 'profile':
+          await fetchProfileData()
           break
         case 'interactive-map':
           // No data needed for map
@@ -706,11 +723,59 @@ function BiddingPortalContent() {
     setApplicationFeePayments(appFeePayments)
   }
 
+  const fetchProfileData = async () => {
+    if (!user?.id) return
+    let { data } = await supabase
+      .from('user_profiles')
+      .select('company_name, address, poc_contact_number')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (!data) {
+      const alt = await supabase
+        .from('user_profiles')
+        .select('company_name, address, poc_contact_number')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      data = alt.data
+    }
+
+    setProfileData((data as PortalProfileData) || null)
+  }
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setPasswordStatus(null)
+
+    if (!passwordMeetsPolicy(newPassword)) {
+      setPasswordStatus({ type: 'error', text: passwordPolicyErrorMessage() })
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordStatus({ type: 'error', text: 'Confirm password does not match.' })
+      return
+    }
+
+    setUpdatingPassword(true)
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword })
+      if (error) throw error
+      setPasswordStatus({ type: 'ok', text: 'Password updated successfully.' })
+      setNewPassword('')
+      setConfirmPassword('')
+      setPasswordCardOpen(false)
+    } catch (err: any) {
+      setPasswordStatus({ type: 'error', text: err?.message || 'Failed to update password.' })
+    } finally {
+      setUpdatingPassword(false)
+    }
+  }
+
   // Legacy function for backward compatibility (used by createTicket)
   const fetchAllData = async () => {
     // Refresh all loaded tabs
     setLoadedTabs(new Set())
-    for (const tab of ['opened-bidding', 'purchased-documents', 'submitted-applications', 'support', 'payments'] as PortalTab[]) {
+    for (const tab of ['opened-bidding', 'purchased-documents', 'submitted-applications', 'support', 'payments', 'profile'] as PortalTab[]) {
       if (loadedTabs.has(tab)) {
         await fetchTabData(tab)
       }
@@ -1056,6 +1121,7 @@ function BiddingPortalContent() {
       case 'submitted-applications': return 'Track your submitted bids'
       case 'support': return 'Create and manage support tickets'
       case 'payments': return 'View all your payment history'
+      case 'profile': return 'Manage your organization information and account security'
       default: return ''
     }
   }
@@ -1068,6 +1134,7 @@ function BiddingPortalContent() {
       case 'submitted-applications': return 'Submitted Bids'
       case 'support': return 'Support Tickets'
       case 'payments': return 'Payments'
+      case 'profile': return 'Profile'
       default: return 'Bidding Portal'
     }
   }
@@ -1104,9 +1171,7 @@ function BiddingPortalContent() {
     )
   }
 
-  const filteredOpenBlocks = openBlocksView === 'open'
-    ? openBlocks.filter((b) => !b.isPurchased)
-    : openBlocks.filter((b) => b.isPurchased)
+  const filteredOpenBlocks = openBlocks.filter((b) => !b.isPurchased)
 
   return (
     <BiddingPortalLayout activeTab={activeTab} title={getTitle()} subtitle={getSubtitle()}>
@@ -1163,154 +1228,125 @@ function BiddingPortalContent() {
             </Card>
           ) : (
             <div className="grid gap-4 w-full max-w-full">
-              {/* Toggle between available and purchased blocks */}
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-gray-700">View blocks</p>
-                </div>
-                <div className="inline-flex items-center rounded-full bg-gray-100 p-1">
-                  <button
-                    className={`px-4 py-2 text-sm font-medium rounded-full transition-colors ${
-                      openBlocksView === 'open' ? 'shadow text-white' : 'text-gray-600'
-                    }`}
-                    style={openBlocksView === 'open' ? { backgroundColor: '#317070' } : {}}
-                    onClick={() => setOpenBlocksView('open')}
-                  >
-                    Open Blocks ({openBlocks.filter(b => !b.isPurchased).length})
-                  </button>
-                  <button
-                    className={`px-4 py-2 text-sm font-medium rounded-full transition-colors ${
-                      openBlocksView === 'purchased' ? 'bg-white shadow text-teal-700' : 'text-gray-600'
-                    }`}
-                    onClick={() => setOpenBlocksView('purchased')}
-                  >
-                    Purchased ({openBlocks.filter(b => b.isPurchased).length})
-                  </button>
-                </div>
-              </div>
-
-              {filteredOpenBlocks.length === 0 ? (
-                <Card className="border-dashed">
-                  <CardContent className="py-10 text-center">
-                    <FileStack className="w-14 h-14 text-gray-300 mx-auto mb-3" />
-                    <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                      {openBlocksView === 'open' ? 'No open blocks available' : 'No purchased blocks here'}
-                    </h3>
-                    <p className="text-gray-500">
-                      {openBlocksView === 'open'
-                        ? 'Check back later for newly opened blocks.'
-                        : 'Your purchased blocks will appear here.'}
-                    </p>
-                  </CardContent>
-                </Card>
-              ) : (
-                filteredOpenBlocks.map((block) => {
-                  const brochureHref = getBrochureHref(block.brochure_url)
-                  const isPurchased = block.isPurchased
-                  const cardClasses = isPurchased
-                    ? 'bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200'
-                    : 'border border-gray-200'
-
-                  return (
-                    <Card key={block.id} className={`hover:shadow-md transition-shadow w-full max-w-full ${cardClasses}`}>
-                      <CardContent className="p-4 lg:p-5 w-full max-w-full overflow-x-hidden">
-                        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 w-full max-w-full">
-                          <div className="flex items-start space-x-4">
-                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                              isPurchased ? 'bg-blue-100' : 'bg-teal-50'
-                            }`}>
-                              {isPurchased ? (
-                                <FileCheck className="w-6 h-6 text-blue-700" />
-                              ) : (
-                                <MapPin className="w-6 h-6 text-teal-600" />
-                              )}
-                            </div>
-                            <div>
-                              <div className="flex items-center flex-wrap gap-2 mb-1">
-                                <h3 className="text-lg font-semibold text-gray-900">{block.name}</h3>
+              <div className="grid gap-4 lg:grid-cols-12">
+                <Card className="lg:col-span-4 overflow-hidden">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Opened Bidding</CardTitle>
+                    <p className="text-xs text-gray-500">Open blocks ({filteredOpenBlocks.length})</p>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="space-y-3 max-h-[calc(100vh-14rem)] min-h-[320px] overflow-y-auto pr-1">
+                      {filteredOpenBlocks.length === 0 ? (
+                        <div className="rounded-lg border border-dashed p-6 text-center text-sm text-gray-500">
+                          No open blocks available.
+                        </div>
+                      ) : (
+                        filteredOpenBlocks.map((block) => {
+                          const brochureHref = getBrochureHref(block.brochure_url)
+                          const isPurchased = block.isPurchased
+                          return (
+                            <div
+                              key={block.id}
+                              className={`rounded-xl border p-3 transition-colors cursor-pointer ${
+                                selectedOpenedBlockId === block.id
+                                  ? 'border-emerald-500 bg-emerald-50'
+                                  : 'border-gray-200'
+                              }`}
+                              onClick={() => setSelectedOpenedBlockId(block.id)}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <p className="font-semibold text-sm text-gray-900">{block.name}</p>
+                                  <p className="text-xs text-gray-500">{block.code}</p>
+                                </div>
                                 <Badge className={isPurchased ? 'bg-blue-50 text-blue-700' : 'bg-emerald-50 text-emerald-700'}>
                                   {isPurchased ? 'Purchased' : 'Open'}
                                 </Badge>
                               </div>
-                              <p className="text-sm text-gray-500">{block.code}</p>
-                              <div className="flex items-center space-x-4 mt-2 text-sm text-gray-600">
-                                <span>{block.zone_name}</span>
-                                <span>•</span>
-                                <span>{block.block_name}</span>
-                              </div>
-                              {block.bid_submission_deadline && (
-                                <p className="text-sm text-amber-600 mt-2 flex items-center">
-                                  <Clock className="w-4 h-4 mr-1" />
-                                  Deadline: {formatDate(block.bid_submission_deadline)}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                            {isPurchased && block.pdf_url && block.pdf_url.length > 0 && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleDownload(block.id, block.pdf_url![0], block.name)}
-                                disabled={downloadingAreas.has(`${block.id}_${block.pdf_url![0]}`)}
-                                className="border-teal-200 text-teal-700 hover:bg-teal-50 font-medium"
-                              >
-                                {downloadingAreas.has(`${block.id}_${block.pdf_url![0]}`) ? (
-                                  <>
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                    Downloading...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Download className="w-4 h-4 mr-2" />
-                                    Bidding Documents
-                                  </>
+                              <p className="text-xs text-gray-600 mt-2">{block.zone_name} • {block.block_name}</p>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {brochureHref && (
+                                  <Button size="sm" variant="outline" asChild className="h-8 text-xs border-teal-200 text-teal-700 hover:bg-teal-50">
+                                    <a href={brochureHref} target="_blank" rel="noopener noreferrer">
+                                      <Download className="w-3.5 h-3.5 mr-1" />
+                                      Brochure
+                                    </a>
+                                  </Button>
                                 )}
-                              </Button>
-                            )}
-                            {brochureHref && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                asChild
-                                className="border-teal-200 text-teal-700 hover:bg-teal-50 font-medium"
-                              >
-                                <a
-                                  href={brochureHref}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  <Download className="w-4 h-4 mr-2" />
-                                  Download Brochure
-                                </a>
-                              </Button>
-                            )}
-                            {!isPurchased && (
-                              isInCart(block.id) ? (
-                                <Button
-                                  disabled
-                                  className="!bg-gray-400 !text-white cursor-not-allowed"
-                                >
-                                  <ShoppingCart className="w-4 h-4 mr-2" />
-                                  In Cart
-                                </Button>
-                              ) : (
-                                <Button
-                                  onClick={() => handleAddToCart(block)}
-                                  className="!bg-teal-600 hover:!bg-teal-700 !text-white"
-                                >
-                                  <ShoppingCart className="w-4 h-4 mr-2" />
-                                  Purchase ({formatPrice(block.price)})
-                                </Button>
-                              )
-                            )}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )
-                })
-              )}
+                                {!isPurchased && (
+                                  isInCart(block.id) ? (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => removeFromCart(block.id)}
+                                      className="h-8 text-xs border-red-300 text-red-700 hover:bg-red-50"
+                                    >
+                                      Remove from Cart
+                                    </Button>
+                                  ) : (
+                                    <Button size="sm" onClick={() => handleAddToCart(block)} className="h-8 text-xs !bg-teal-600 hover:!bg-teal-700 !text-white">
+                                      <ShoppingCart className="w-3.5 h-3.5 mr-1" />
+                                      Add ({formatPrice(block.price)})
+                                    </Button>
+                                  )
+                                )}
+                                {isPurchased && block.pdf_url && block.pdf_url.length > 0 && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleDownload(block.id, block.pdf_url![0], block.name)}
+                                    disabled={downloadingAreas.has(`${block.id}_${block.pdf_url![0]}`)}
+                                    className="h-8 text-xs border-teal-200 text-teal-700 hover:bg-teal-50"
+                                  >
+                                    {downloadingAreas.has(`${block.id}_${block.pdf_url![0]}`) ? 'Downloading...' : 'Documents'}
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <div className="lg:col-span-8 space-y-4 lg:h-[calc(100vh-14rem)] flex flex-col">
+                  <Card className="flex-1 min-h-0">
+                    <CardContent className="p-0 overflow-hidden rounded-xl h-full">
+                      <InteractiveMapComponent
+                        openBlocksOnly={true}
+                        variant="split"
+                        selectedAreaId={selectedOpenedBlockId}
+                        onAreaSelect={(areaId) => setSelectedOpenedBlockId(areaId)}
+                        hideDetailsPanel
+                      />
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border border-teal-200 bg-gradient-to-r from-teal-700 to-teal-600 text-white">
+                    <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-semibold uppercase tracking-wide text-white/85">Cart Summary</p>
+                        <p className="text-sm text-white/90 mt-1">
+                          {getTotalItems()} item(s)
+                          {items.length > 0 ? ` (${items.map(i => i.area.code).join(', ')})` : ''}
+                        </p>
+                        <p className="text-lg font-bold mt-1">Total: {formatPrice(getTotalPrice())}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="secondary"
+                          onClick={() => setCartModalOpen(true)}
+                          disabled={getTotalItems() === 0}
+                          className="bg-white text-teal-800 hover:bg-white/90 disabled:opacity-50"
+                        >
+                          Proceed to Checkout
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
             </div>
           )}
           </div>
@@ -1530,6 +1566,105 @@ function BiddingPortalContent() {
               ))}
             </div>
           )}
+          </div>
+        )
+      )}
+
+      {/* Support Tickets Tab */}
+      {activeTab === 'profile' && (
+        tabLoading['profile'] ? (
+          <div className="flex items-center justify-center min-h-[400px]">
+            <Loader2 className="w-8 h-8 animate-spin text-teal-600" />
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <Card className="border-0 text-white overflow-hidden bg-gradient-to-r from-teal-700 via-teal-600 to-cyan-600 shadow-xl">
+              <CardContent className="p-6 md:p-8">
+                <p className="text-white/80 text-sm uppercase tracking-wide font-semibold">My Account</p>
+                <h1 className="text-2xl md:text-3xl font-bold mt-2">
+                  {profileData?.company_name || 'Profile Details'}
+                </h1>
+                <p className="text-white/85 mt-2 text-sm md:text-base">
+                  Manage your organization information and account security settings.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-sm border border-gray-200">
+              <CardHeader>
+                <CardTitle>Organization Details</CardTitle>
+                <CardDescription>Your current profile information.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="rounded-xl border border-gray-200 bg-white p-4">
+                    <p className="text-xs uppercase tracking-wide text-gray-500 font-medium mb-2">Company Name</p>
+                    <div className="text-gray-900 font-medium">{profileData?.company_name || '-'}</div>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-white p-4">
+                    <p className="text-xs uppercase tracking-wide text-gray-500 font-medium mb-2">Email</p>
+                    <div className="text-gray-900 font-medium">{user?.email || '-'}</div>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-white p-4">
+                    <p className="text-xs uppercase tracking-wide text-gray-500 font-medium mb-2">POC Contact Number</p>
+                    <div className="text-gray-900 font-medium">{profileData?.poc_contact_number || '-'}</div>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-white p-4">
+                    <p className="text-xs uppercase tracking-wide text-gray-500 font-medium mb-2">Address</p>
+                    <div className="text-gray-900 font-medium">{profileData?.address || '-'}</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-sm border border-gray-200">
+              <CardHeader>
+                <button
+                  type="button"
+                  onClick={() => setPasswordCardOpen((v) => !v)}
+                  className="w-full flex items-center justify-between text-left"
+                >
+                  <CardTitle>Change Password</CardTitle>
+                  <ChevronRight className={`w-5 h-5 text-gray-500 transition-transform ${passwordCardOpen ? 'rotate-90' : ''}`} />
+                </button>
+                <CardDescription>Use a strong password to secure your account.</CardDescription>
+              </CardHeader>
+              {passwordCardOpen && (
+                <CardContent>
+                  <form onSubmit={handleChangePassword} className="space-y-4">
+                    <Input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="New password"
+                      autoComplete="new-password"
+                      required
+                    />
+                    <PasswordRequirements password={newPassword} />
+                    <Input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Confirm new password"
+                      autoComplete="new-password"
+                      required
+                    />
+                    {passwordStatus && (
+                      <p className={passwordStatus.type === 'ok' ? 'text-emerald-700 text-sm' : 'text-red-700 text-sm'}>
+                        {passwordStatus.text}
+                      </p>
+                    )}
+                    <Button
+                      type="submit"
+                      disabled={updatingPassword}
+                      className="bg-teal-600 hover:bg-teal-700 text-white"
+                    >
+                      {updatingPassword ? 'Updating...' : 'Update Password'}
+                    </Button>
+                  </form>
+                </CardContent>
+              )}
+            </Card>
           </div>
         )
       )}
@@ -1957,54 +2092,6 @@ function BiddingPortalContent() {
           </div>
           </div>
         )
-      )}
-
-      {/* Cart Button - Only show on opened-bidding tab */}
-      {activeTab === 'opened-bidding' && user && getTotalItems() > 0 && (
-        <div
-          className="fixed top-1/2 right-0 z-50"
-          style={{ transform: 'translateY(-50%)' }}
-          onMouseEnter={() => {
-            setCartHovered(true)
-            setCartExpanded(true)
-          }}
-          onMouseLeave={() => {
-            setCartHovered(false)
-            setCartExpanded(false)
-          }}
-        >
-          <button
-            onClick={() => setCartModalOpen(true)}
-            className={`
-              floating-button group flex items-center justify-center
-              text-white font-semibold
-              shadow-lg hover:shadow-xl
-              relative animate-cart-ripple animate-cart-pulse
-              h-14 rounded-l-xl
-              ${cartExpanded ? 'expanded' : ''}
-            `}
-            aria-label="Shopping Cart"
-            style={{ 
-              backgroundColor: cartHovered ? '#f5a623' : '#feb52f',
-              backgroundImage: 'none'
-            }}
-          >
-            <div className="flex items-center justify-center flex-shrink-0 relative">
-              <ShoppingCart className="w-6 h-6" />
-              {getTotalItems() > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold animate-pulse">
-                  {getTotalItems()}
-                </span>
-              )}
-            </div>
-            <div className="floating-button-text">
-              <span className="text-sm lg:text-base font-semibold">
-                Cart ({getTotalItems()})
-              </span>
-              <ChevronRight className="w-4 h-4 flex-shrink-0" />
-            </div>
-          </button>
-        </div>
       )}
 
       {/* Cart Modal */}

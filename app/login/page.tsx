@@ -7,6 +7,7 @@ import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import Image from 'next/image'
+import PublicSiteHeader from '../components/PublicSiteHeader'
 
 function LoginContent() {
   const [identifier, setIdentifier] = useState('')
@@ -53,6 +54,9 @@ function LoginContent() {
 
   return (
     <div className="relative min-h-screen flex items-center justify-center py-12 md:py-16">
+      <div className="absolute top-0 left-0 right-0 z-20">
+        <PublicSiteHeader variant="heroOverlayNeutral" />
+      </div>
       {/* Background Image */}
       <div className="absolute inset-0 w-full h-full z-0">
         <img src="/images/Banner-2.webp" alt="Banner" className="w-full h-full object-cover" />
@@ -125,6 +129,11 @@ function LoginContent() {
                   {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
+              <div className="mt-2 text-right">
+                <Link href="/reset-password" className="text-sm text-teal-600 hover:text-teal-700 font-medium">
+                  Forgot password?
+                </Link>
+              </div>
             </div>
 
             <button
@@ -144,18 +153,6 @@ function LoginContent() {
           </form>
 
           <div className="text-center pt-4 border-t border-gray-200 space-y-3">
-            <p className="text-sm text-gray-600">
-              Already logged in on the main site?{' '}
-              <button
-                onClick={() => {
-                  // Try to refresh session from main site
-                  window.location.reload()
-                }}
-                className="text-teal-600 hover:text-teal-700 font-medium"
-              >
-                Refresh Session
-              </button>
-            </p>
             <p className="text-sm text-gray-600">
               Don&apos;t have an account?{' '}
               <Link href="/signup" className="text-teal-600 hover:text-teal-700 font-medium">

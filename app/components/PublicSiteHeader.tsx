@@ -51,50 +51,58 @@ export default function PublicSiteHeader({
           <Button
             variant="ghost"
             size="sm"
-            className={cn(
-              overlay ? 'text-white/95 hover:text-white hover:bg-white/10' : 'text-teal-800',
-              'hidden sm:inline-flex',
-            )}
+            className={cn(overlay ? 'text-white/95 hover:text-white hover:bg-white/10' : 'text-teal-800')}
             asChild
           >
-            <Link href="/">Home</Link>
+            <Link href="/support">Support</Link>
           </Button>
-          {!authLoading && user && (
+          {!authLoading && user ? (
             <Button
-              variant="ghost"
+              variant={neutral ? 'outline' : 'default'}
               size="sm"
-              className={cn(overlay ? 'text-white/95 hover:text-white hover:bg-white/10' : 'text-teal-800')}
+              className={
+                overlay && neutral
+                  ? 'border-white/85 bg-transparent text-white hover:bg-white/10 hover:text-white'
+                  : overlay
+                    ? 'bg-white text-teal-900 hover:bg-white/90 shadow-md'
+                    : 'bg-teal-600 hover:bg-teal-700 text-white'
+              }
               asChild
             >
-              <Link href="/bidding-portal">My portal</Link>
+              <Link href="/bidding-portal">Access Bidding Portal</Link>
             </Button>
+          ) : (
+            !authLoading && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={
+                    overlay
+                      ? 'border-white/70 bg-transparent text-white hover:bg-white/10 hover:text-white'
+                      : 'border-teal-300 text-teal-800'
+                  }
+                  asChild
+                >
+                  <Link href="/login">Sign in</Link>
+                </Button>
+                <Button
+                  variant={neutral ? 'outline' : 'default'}
+                  size="sm"
+                  className={
+                    overlay && neutral
+                      ? 'border-white/85 bg-transparent text-white hover:bg-white/10 hover:text-white'
+                      : overlay
+                        ? 'bg-white text-teal-900 hover:bg-white/90 shadow-md'
+                        : 'bg-teal-600 hover:bg-teal-700 text-white'
+                  }
+                  asChild
+                >
+                  <Link href="/signup">Create bidder account</Link>
+                </Button>
+              </>
+            )
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            className={
-              overlay
-                ? 'border-white/70 bg-transparent text-white hover:bg-white/10 hover:text-white'
-                : 'border-teal-300 text-teal-800'
-            }
-            asChild
-          >
-            <Link href="/login">Sign in</Link>
-          </Button>
-          <Button
-            variant={neutral ? 'outline' : 'default'}
-            size="sm"
-            className={
-              overlay && neutral
-                ? 'border-white/85 bg-transparent text-white hover:bg-white/10 hover:text-white'
-                : overlay
-                  ? 'bg-white text-teal-900 hover:bg-white/90 shadow-md'
-                  : 'bg-teal-600 hover:bg-teal-700 text-white'
-            }
-            asChild
-          >
-            <Link href="/signup">Create bidder account</Link>
-          </Button>
         </nav>
       </div>
     </header>

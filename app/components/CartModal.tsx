@@ -214,6 +214,12 @@ export default function CartModal({ isOpen, onClose, onPaymentSuccess }: CartMod
       }
 
       // Start PayFast checkout session via backend
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData.session?.access_token
+      if (!accessToken) {
+        throw new Error('Session expired. Please sign in again and retry.')
+      }
+
       const payload = {
         userId,
         cart: items.map(it => ({ areaId: it.area.id, quantity: Math.max(1, it.quantity) })),
@@ -221,7 +227,10 @@ export default function CartModal({ isOpen, onClose, onPaymentSuccess }: CartMod
       }
       const resp = await fetch(`/api/payfast/checkout`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: JSON.stringify(payload)
       })
       if (!resp.ok) {
@@ -257,7 +266,7 @@ export default function CartModal({ isOpen, onClose, onPaymentSuccess }: CartMod
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[3000] p-4">
       <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           {/* Header */}

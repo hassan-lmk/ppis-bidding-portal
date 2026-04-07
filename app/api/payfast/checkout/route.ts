@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createServerSupabaseClient, supabaseAdmin } from '../../_supabaseAdmin'
 
 function requireEnv (key: string): string {
   const v = process.env[key]
@@ -59,16 +60,25 @@ async function getAccessToken (basketId: string, amount: number) {
 export async function POST (req: NextRequest) {
   try {
     console.log('[Checkout] Starting checkout request')
-    const { userId, cart } = await req.json()
-    if (!userId || !Array.isArray(cart) || cart.length === 0) {
+    const { cart } = await req.json()
+    if (!Array.isArray(cart) || cart.length === 0) {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
     }
 
-    console.log('[Checkout] Importing Supabase client')
-    // Use shared Supabase admin client with TLS handling
-    const { supabaseAdmin } = await import('../../../lib/supabase')
-    const supabase = supabaseAdmin
-    console.log('[Checkout] Supabase client loaded, URL:', process.env.NEXT_PUBLIC_SUPABASE_URL)
+    const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || ''
+    const accessToken = authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length) : ''
+    if (!accessToken) {
+      return NextResponse.json({ error: 'Missing Authorization token' }, { status: 401 })
+    }
+
+    // Validate token and bind all DB writes to the authenticated user (RLS-safe).
+    const { data: { user }, error: userErr } = await supabaseAdmin.auth.getUser(accessToken)
+    if (userErr || !user) {
+      return NextResponse.json({ error: 'Invalid or expired session' }, { status: 401 })
+    }
+
+    const supabase = createServerSupabaseClient(accessToken)
+    console.log('[Checkout] Supabase user verified:', user.id)
 
     console.log('[Checkout] Fetching areas for cart:', cart.map((i: any) => i.areaId))
     const areaIds = cart.map((i: any) => i.areaId)
@@ -93,7 +103,7 @@ export async function POST (req: NextRequest) {
     // Note: total_amount is stored as numeric, so we can store USD directly
     const { data: order, error: orderErr } = await supabase
       .from('orders')
-      .insert({ user_id: userId, basket_id: basketId, total_amount: amountUsd, status: 'pending' })
+      .insert({ user_id: user.id, basket_id: basketId, total_amount: amountUsd, status: 'pending' })
       .select('*')
       .single()
     if (orderErr) throw orderErr
