@@ -159,7 +159,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 })
 
-// Server-side client for API routes — uses the anon key; RLS is enforced on Supabase.
+// Server-side anon client (name is legacy). For RLS bypass on trusted webhooks, use
+// `createServiceRoleClient()` from `app/api/_supabaseAdmin.ts` with server-only SUPABASE_SERVICE_ROLE_KEY.
 export const supabaseAdmin = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: false,

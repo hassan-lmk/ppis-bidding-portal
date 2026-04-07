@@ -39,8 +39,8 @@ export async function GET (req: NextRequest) {
     // If basket_id is missing, try to look it up by transaction_id (if PayFast sent it)
     if (!basketId) {
       if (txId) {
-        const { supabaseAdmin } = await import('../../../lib/supabase')
-        const supabase = supabaseAdmin
+        const { createServiceRoleClient } = await import('../../_supabaseAdmin')
+        const supabase = createServiceRoleClient()
         const { data: payment } = await supabase
           .from('payments')
           .select('orders(basket_id)')
@@ -93,8 +93,8 @@ export async function GET (req: NextRequest) {
     // This ensures payments are processed even if IPN is delayed or not called.
     if (isValid && errCode === '000' && basketId && txId) {
       try {
-        const { supabaseAdmin } = await import('../../../lib/supabase')
-        const supabase = supabaseAdmin
+        const { createServiceRoleClient } = await import('../../_supabaseAdmin')
+        const supabase = createServiceRoleClient()
         
         // Check if order exists and get its status
         const { data: order } = await supabase

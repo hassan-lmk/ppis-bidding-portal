@@ -1075,6 +1075,19 @@ function BiddingPortalContent() {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(price)
   }
 
+  const getBasketIdFromRawPayload = (rawPayload: any): string | null => {
+    if (!rawPayload) return null
+    let payload = rawPayload
+    if (typeof payload === 'string') {
+      try {
+        payload = JSON.parse(payload)
+      } catch {
+        return null
+      }
+    }
+    return payload?.basket_id || null
+  }
+
   const getCountdown = (targetDate: string) => {
     const target = new Date(targetDate)
     const diff = target.getTime() - now.getTime()
@@ -1781,56 +1794,35 @@ function BiddingPortalContent() {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Payment Summary - Moved to Top */}
+            {/* Compact Payment Summary */}
             {(biddingDocPayments.length > 0 || applicationFeePayments.length > 0) && (
-              <Card className="bg-gradient-to-br from-teal-500 via-teal-600 to-teal-700 border-0 shadow-xl">
-                <CardContent className="p-6 lg:p-8">
-                  <div className="flex items-center space-x-3 mb-6">
-                    <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                      <CreditCard className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <h2 className="text-2xl font-bold text-white">Payment Summary</h2>
-                      <p className="text-teal-100 text-sm">Overview of all your transactions</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-5 border border-white/20">
-                      <div className="flex items-center space-x-3 mb-3">
-                        <FileText className="w-5 h-5 text-white/80" />
-                        <p className="text-sm font-medium text-white/80">Bidding Documents</p>
-                      </div>
-                      <p className="text-3xl font-bold text-white mb-1">
-                        {new Intl.NumberFormat('en-US', {
-                          style: 'currency',
-                          currency: 'USD'
-                        }).format(biddingDocPayments.reduce((sum, p) => sum + p.amount, 0))}
+              <Card className="border border-teal-100 bg-gradient-to-r from-teal-600 to-teal-700 text-white">
+                <CardContent className="p-4 md:p-5">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="rounded-lg bg-white/10 px-4 py-3 border border-white/20">
+                      <p className="text-xs uppercase tracking-wide text-white/75">Bidding Documents</p>
+                      <p className="text-xl font-bold mt-1">
+                        {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
+                          biddingDocPayments.reduce((sum, p) => sum + p.amount, 0)
+                        )}
                       </p>
-                      <p className="text-xs text-white/70">{biddingDocPayments.length} payment{biddingDocPayments.length !== 1 ? 's' : ''}</p>
+                      <p className="text-xs text-white/80 mt-0.5">{biddingDocPayments.length} payments</p>
                     </div>
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-5 border border-white/20">
-                      <div className="flex items-center space-x-3 mb-3">
-                        <CreditCard className="w-5 h-5 text-white/80" />
-                        <p className="text-sm font-medium text-white/80">Application Fees</p>
-                      </div>
-                      <p className="text-3xl font-bold text-white mb-1">
+                    <div className="rounded-lg bg-white/10 px-4 py-3 border border-white/20">
+                      <p className="text-xs uppercase tracking-wide text-white/75">Application Fees</p>
+                      <p className="text-xl font-bold mt-1">
                         {new Intl.NumberFormat('en-PK', {
                           style: 'currency',
                           currency: 'PKR',
                           minimumFractionDigits: 0
                         }).format(applicationFeePayments.reduce((sum, p) => sum + p.amount, 0))}
                       </p>
-                      <p className="text-xs text-white/70">{applicationFeePayments.length} payment{applicationFeePayments.length !== 1 ? 's' : ''}</p>
+                      <p className="text-xs text-white/80 mt-0.5">{applicationFeePayments.length} payments</p>
                     </div>
-                    <div className="bg-white/20 backdrop-blur-sm rounded-xl p-5 border border-white/30">
-                      <div className="flex items-center space-x-3 mb-3">
-                        <Receipt className="w-5 h-5 text-white" />
-                        <p className="text-sm font-medium text-white">Total Payments</p>
-                      </div>
-                      <p className="text-3xl font-bold text-white mb-1">
-                        {biddingDocPayments.length + applicationFeePayments.length}
-                      </p>
-                      <p className="text-xs text-white/90">All transactions</p>
+                    <div className="rounded-lg bg-white/20 px-4 py-3 border border-white/30">
+                      <p className="text-xs uppercase tracking-wide text-white/85">Total Transactions</p>
+                      <p className="text-xl font-bold mt-1">{biddingDocPayments.length + applicationFeePayments.length}</p>
+                      <p className="text-xs text-white/90 mt-0.5">All payment records</p>
                     </div>
                   </div>
                 </CardContent>
@@ -1838,258 +1830,209 @@ function BiddingPortalContent() {
             )}
 
             {/* Bidding Document Payments */}
-          <div>
-            <div className="flex items-center space-x-2 mb-4">
-              <FileText className="w-5 h-5 text-gray-600" />
-              <h3 className="text-lg font-semibold text-gray-900">Bidding Document Payments</h3>
-              <Badge className="bg-teal-50 text-teal-700">{biddingDocPayments.length}</Badge>
-            </div>
-            
-            {biddingDocPayments.length === 0 ? (
-              <Card className="border-dashed border-gray-200">
-                <CardContent className="py-16 text-center">
-                  <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-                    <FileText className="w-8 h-8 text-gray-400" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No Bidding Document Payments</h3>
-                  <p className="text-gray-500">You haven&apos;t made any bidding document payments yet.</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-4">
-                {biddingDocPayments.map((payment) => (
-                  <Card key={payment.id} className="hover:shadow-lg transition-all duration-200 border border-gray-200">
-                    <CardContent className="p-5 lg:p-6">
-                      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-5">
-                        <div className="flex items-start space-x-4 flex-1">
-                          <div className="w-14 h-14 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0 border border-gray-200">
-                            <FileText className="w-7 h-7 text-gray-600" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center space-x-3 mb-2">
-                              <h3 className="text-lg font-bold text-gray-900">{payment.area_name}</h3>
-                              <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 font-medium">Paid</Badge>
-                            </div>
-                            <p className="text-sm text-gray-600 mb-4 font-medium">{payment.area_code}</p>
-                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                              <div className="bg-gray-50 rounded-lg p-3">
-                                <p className="text-xs text-gray-500 mb-1 font-medium">Amount</p>
-                                <p className="text-base font-bold text-gray-900">
-                                  {new Intl.NumberFormat('en-US', {
-                                    style: 'currency',
-                                    currency: payment.currency
-                                  }).format(payment.amount)}
-                                </p>
-                              </div>
-                              <div className="bg-gray-50 rounded-lg p-3">
-                                <p className="text-xs text-gray-500 mb-1 font-medium">Payment Date</p>
-                                <p className="text-sm font-semibold text-gray-900">
-                                  {payment.paid_at ? formatDate(payment.paid_at) : formatDate(payment.created_at)}
-                                </p>
-                              </div>
-                              {payment.transaction_id && (
-                                <div className="bg-gray-50 rounded-lg p-3">
-                                  <p className="text-xs text-gray-500 mb-1 font-medium">Transaction ID</p>
-                                  <p className="text-xs font-mono text-gray-900 break-all">{payment.transaction_id.substring(0, 20)}...</p>
-                                </div>
-                              )}
-                              <div className="bg-gray-50 rounded-lg p-3">
-                                <p className="text-xs text-gray-500 mb-1 font-medium">Order ID</p>
-                                <p className="text-xs font-mono text-gray-900">{payment.basket_id}</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="lg:flex-shrink-0 flex flex-col items-start lg:items-end gap-3">
-                          <Badge className="bg-blue-100 text-blue-700 border-blue-200 capitalize font-medium px-3 py-1">
-                            {payment.payment_method}
-                          </Badge>
-                          <Button
-                            onClick={() => handleDownloadReceipt(payment, 'bidding_blocks')}
-                            disabled={downloadingReceipts.has(payment.id)}
-                            variant="outline"
-                            size="sm"
-                            className="flex items-center space-x-2 border-teal-300 text-teal-700 hover:bg-teal-50 hover:border-teal-400"
-                          >
-                            {downloadingReceipts.has(payment.id) ? (
-                              <>
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                <span>Generating...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Receipt className="w-4 h-4" />
-                                <span>Download Receipt</span>
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Application Fee Payments */}
-          <div>
-            <div className="flex items-center space-x-2 mb-4">
-              <CreditCard className="w-5 h-5 text-gray-600" />
-              <h3 className="text-lg font-semibold text-gray-900">Application Fee Payments</h3>
-              <Badge className="bg-orange-50 text-orange-700">{applicationFeePayments.length}</Badge>
-            </div>
-            
-            {applicationFeePayments.length === 0 ? (
-              <Card className="border-dashed border-gray-200">
-                <CardContent className="py-16 text-center">
-                  <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-                    <CreditCard className="w-8 h-8 text-gray-400" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No Application Fee Payments</h3>
-                  <p className="text-gray-500">You haven&apos;t made any application fee payments yet.</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-4">
-                {applicationFeePayments.map((payment) => (
-                  <Card key={payment.id} className="hover:shadow-lg transition-all duration-200 border border-gray-200">
-                    <CardContent className="p-5 lg:p-6">
-                      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-5">
-                        <div className="flex items-start space-x-4 flex-1">
-                          <div className="w-14 h-14 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0 border border-gray-200">
-                            <CreditCard className="w-7 h-7 text-gray-600" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center space-x-3 mb-2">
-                              <h3 className="text-lg font-bold text-gray-900">{payment.area_name}</h3>
-                              <Badge className={
-                                payment.status === 'paid' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
-                                payment.status === 'verified' ? 'bg-blue-100 text-blue-700 border-blue-200' :
-                                'bg-gray-100 text-gray-700 border-gray-200'
-                              }>
-                                {payment.status === 'verified' ? 'Verified' : 'Paid'}
+            <Card className="border border-gray-200">
+              <CardHeader className="pb-3">
+                <div className="flex items-center space-x-2">
+                  <FileText className="w-5 h-5 text-gray-600" />
+                  <CardTitle className="text-lg">Bidding Document Payments</CardTitle>
+                  <Badge className="bg-teal-50 text-teal-700">{biddingDocPayments.length}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {biddingDocPayments.length === 0 ? (
+                  <p className="text-gray-500 text-sm">You haven&apos;t made any bidding document payments yet.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[860px] text-sm">
+                      <thead>
+                        <tr className="border-b bg-gray-50">
+                          <th className="text-left px-3 py-2 font-semibold text-gray-700">Area</th>
+                          <th className="text-left px-3 py-2 font-semibold text-gray-700">Order ID</th>
+                          <th className="text-left px-3 py-2 font-semibold text-gray-700">Transaction ID</th>
+                          <th className="text-left px-3 py-2 font-semibold text-gray-700">Method</th>
+                          <th className="text-left px-3 py-2 font-semibold text-gray-700">Date</th>
+                          <th className="text-right px-3 py-2 font-semibold text-gray-700">Amount</th>
+                          <th className="text-center px-3 py-2 font-semibold text-gray-700">Receipt</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {biddingDocPayments.map((payment) => (
+                          <tr key={payment.id} className="border-b last:border-b-0 hover:bg-gray-50/70">
+                            <td className="px-3 py-3">
+                              <div className="font-medium text-gray-900">{payment.area_name}</div>
+                              <div className="text-xs text-gray-500">{payment.area_code}</div>
+                            </td>
+                            <td className="px-3 py-3 font-mono text-xs text-gray-700">{payment.basket_id}</td>
+                            <td className="px-3 py-3 font-mono text-xs text-gray-700">
+                              {payment.transaction_id ? `${payment.transaction_id.slice(0, 20)}...` : '-'}
+                            </td>
+                            <td className="px-3 py-3">
+                              <Badge className="bg-blue-100 text-blue-700 border-blue-200 capitalize">
+                                {payment.payment_method}
                               </Badge>
-                            </div>
-                            <p className="text-sm text-gray-600 mb-4 font-medium">{payment.area_code}</p>
-                            {(() => {
-                              // Extract basket_id from payment_raw_payload
-                              let orderId: string | null = null
-                              if (payment.payment_raw_payload) {
-                                let payload: any = payment.payment_raw_payload
-                                if (typeof payload === 'string') {
-                                  try {
-                                    payload = JSON.parse(payload)
-                                  } catch (e) {
-                                    // Ignore parse errors
-                                  }
-                                }
-                                if (payload && payload.basket_id) {
-                                  orderId = payload.basket_id
-                                }
-                              }
-                              return (
-                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                                  <div className="bg-gray-50 rounded-lg p-3">
-                                    <p className="text-xs text-gray-500 mb-1 font-medium">Amount</p>
-                                    <p className="text-base font-bold text-gray-900">
-                                  {new Intl.NumberFormat('en-PK', {
-                                    style: 'currency',
-                                    currency: payment.currency,
-                                    minimumFractionDigits: 0
-                                  }).format(payment.amount)}
-                                </p>
-                              </div>
-                                  <div className="bg-gray-50 rounded-lg p-3">
-                                    <p className="text-xs text-gray-500 mb-1 font-medium">Payment Date</p>
-                                    <p className="text-sm font-semibold text-gray-900">
-                                  {payment.paid_at ? formatDate(payment.paid_at) : formatDate(payment.created_at)}
-                                </p>
-                              </div>
-                              {payment.payment_method === 'online' && payment.transaction_id && (
-                                    <div className="bg-gray-50 rounded-lg p-3">
-                                      <p className="text-xs text-gray-500 mb-1 font-medium">Transaction ID</p>
-                                      <p className="text-xs font-mono text-gray-900 break-all">{payment.transaction_id.substring(0, 20)}...</p>
-                                    </div>
-                                  )}
-                                  {payment.payment_method === 'online' && orderId && (
-                                    <div className="bg-gray-50 rounded-lg p-3">
-                                      <p className="text-xs text-gray-500 mb-1 font-medium">Order ID</p>
-                                      <p className="text-xs font-mono text-gray-900">{orderId}</p>
-                                </div>
-                              )}
-                              {payment.payment_method === 'bank_challan' && (
-                                <>
-                                  {payment.bank_name && (
-                                    <div className="bg-gray-50 rounded-lg p-3">
-                                      <p className="text-xs text-gray-500 mb-1 font-medium">Bank</p>
-                                      <p className="text-sm font-semibold text-gray-900">{payment.bank_name}</p>
-                                    </div>
-                                  )}
-                                  {payment.challan_number && (
-                                    <div className="bg-gray-50 rounded-lg p-3">
-                                      <p className="text-xs text-gray-500 mb-1 font-medium">Challan Number</p>
-                                      <p className="text-sm font-semibold text-gray-900">{payment.challan_number}</p>
-                                    </div>
-                                  )}
-                                  {payment.challan_date && (
-                                    <div className="bg-gray-50 rounded-lg p-3">
-                                      <p className="text-xs text-gray-500 mb-1 font-medium">Challan Date</p>
-                                      <p className="text-sm font-semibold text-gray-900">
-                                        {new Date(payment.challan_date).toLocaleDateString('en-US', {
-                                          year: 'numeric',
-                                          month: 'short',
-                                          day: 'numeric'
-                                        })}
-                                      </p>
-                                    </div>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                              )
-                            })()}
-                          </div>
-                        </div>
-                        <div className="lg:flex-shrink-0 flex flex-col items-start lg:items-end gap-3">
-                          <Badge className={
-                            payment.payment_method === 'online' ? 'bg-blue-100 text-blue-700 border-blue-200' :
-                            payment.payment_method === 'bank_challan' ? 'bg-purple-100 text-purple-700 border-purple-200' :
-                            'bg-gray-100 text-gray-700 border-gray-200'
-                          }>
-                            {payment.payment_method === 'online' ? 'Online' :
-                             payment.payment_method === 'bank_challan' ? 'Bank Challan' :
-                             'Unknown'}
-                          </Badge>
-                          {payment.payment_method === 'online' && payment.transaction_id && (
-                            <Button
-                              onClick={() => handleDownloadReceipt(payment, 'bid_application')}
-                              disabled={downloadingReceipts.has(payment.id)}
-                              variant="outline"
-                              size="sm"
-                              className="flex items-center space-x-2 border-teal-300 text-teal-700 hover:bg-teal-50 hover:border-teal-400"
-                            >
-                              {downloadingReceipts.has(payment.id) ? (
-                                <>
+                            </td>
+                            <td className="px-3 py-3 text-gray-700">
+                              {formatDate(payment.paid_at || payment.created_at)}
+                            </td>
+                            <td className="px-3 py-3 text-right font-semibold text-gray-900">
+                              {new Intl.NumberFormat('en-US', {
+                                style: 'currency',
+                                currency: payment.currency
+                              }).format(payment.amount)}
+                            </td>
+                            <td className="px-3 py-3 text-center">
+                              <Button
+                                onClick={() => handleDownloadReceipt(payment, 'bidding_blocks')}
+                                disabled={downloadingReceipts.has(payment.id)}
+                                variant="outline"
+                                size="sm"
+                                className="border-teal-300 text-teal-700 hover:bg-teal-50 hover:border-teal-400"
+                              >
+                                {downloadingReceipts.has(payment.id) ? (
                                   <Loader2 className="w-4 h-4 animate-spin" />
-                                  <span>Generating...</span>
-                                </>
-                              ) : (
-                                <>
+                                ) : (
                                   <Receipt className="w-4 h-4" />
-                                  <span>Download Receipt</span>
-                                </>
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
+                                )}
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Application Fee Payments */}
+            <Card className="border border-gray-200">
+              <CardHeader className="pb-3">
+                <div className="flex items-center space-x-2">
+                  <CreditCard className="w-5 h-5 text-gray-600" />
+                  <CardTitle className="text-lg">Application Fee Payments</CardTitle>
+                  <Badge className="bg-orange-50 text-orange-700">{applicationFeePayments.length}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {applicationFeePayments.length === 0 ? (
+                  <p className="text-gray-500 text-sm">You haven&apos;t made any application fee payments yet.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[980px] text-sm">
+                      <thead>
+                        <tr className="border-b bg-gray-50">
+                          <th className="text-left px-3 py-2 font-semibold text-gray-700">Area</th>
+                          <th className="text-left px-3 py-2 font-semibold text-gray-700">Status</th>
+                          <th className="text-left px-3 py-2 font-semibold text-gray-700">Method</th>
+                          <th className="text-left px-3 py-2 font-semibold text-gray-700">Transaction / Order</th>
+                          <th className="text-left px-3 py-2 font-semibold text-gray-700">Bank / Challan</th>
+                          <th className="text-left px-3 py-2 font-semibold text-gray-700">Date</th>
+                          <th className="text-right px-3 py-2 font-semibold text-gray-700">Amount</th>
+                          <th className="text-center px-3 py-2 font-semibold text-gray-700">Receipt</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {applicationFeePayments.map((payment) => {
+                          const orderId = getBasketIdFromRawPayload(payment.payment_raw_payload)
+                          const paymentMethodLabel =
+                            payment.payment_method === 'online'
+                              ? 'Online'
+                              : payment.payment_method === 'bank_challan'
+                              ? 'Bank Challan'
+                              : 'Unknown'
+                          const paymentStatusLabel = payment.status === 'verified' ? 'Verified' : 'Paid'
+
+                          return (
+                            <tr key={payment.id} className="border-b last:border-b-0 hover:bg-gray-50/70">
+                              <td className="px-3 py-3">
+                                <div className="font-medium text-gray-900">{payment.area_name}</div>
+                                <div className="text-xs text-gray-500">{payment.area_code}</div>
+                              </td>
+                              <td className="px-3 py-3">
+                                <Badge
+                                  className={
+                                    payment.status === 'verified'
+                                      ? 'bg-blue-100 text-blue-700 border-blue-200'
+                                      : 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                                  }
+                                >
+                                  {paymentStatusLabel}
+                                </Badge>
+                              </td>
+                              <td className="px-3 py-3">
+                                <Badge
+                                  className={
+                                    payment.payment_method === 'online'
+                                      ? 'bg-blue-100 text-blue-700 border-blue-200'
+                                      : payment.payment_method === 'bank_challan'
+                                      ? 'bg-purple-100 text-purple-700 border-purple-200'
+                                      : 'bg-gray-100 text-gray-700 border-gray-200'
+                                  }
+                                >
+                                  {paymentMethodLabel}
+                                </Badge>
+                              </td>
+                              <td className="px-3 py-3 font-mono text-xs text-gray-700">
+                                {payment.transaction_id ? `${payment.transaction_id.slice(0, 20)}...` : '-'}
+                                {orderId ? <div className="mt-1">Order: {orderId}</div> : null}
+                              </td>
+                              <td className="px-3 py-3 text-xs text-gray-700">
+                                {payment.payment_method === 'bank_challan' ? (
+                                  <div className="space-y-1">
+                                    <div>{payment.bank_name || '-'}</div>
+                                    <div>{payment.challan_number || '-'}</div>
+                                    <div>
+                                      {payment.challan_date
+                                        ? new Date(payment.challan_date).toLocaleDateString('en-US', {
+                                            year: 'numeric',
+                                            month: 'short',
+                                            day: 'numeric'
+                                          })
+                                        : '-'}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  '-'
+                                )}
+                              </td>
+                              <td className="px-3 py-3 text-gray-700">
+                                {formatDate(payment.paid_at || payment.created_at)}
+                              </td>
+                              <td className="px-3 py-3 text-right font-semibold text-gray-900">
+                                {new Intl.NumberFormat('en-PK', {
+                                  style: 'currency',
+                                  currency: payment.currency,
+                                  minimumFractionDigits: 0
+                                }).format(payment.amount)}
+                              </td>
+                              <td className="px-3 py-3 text-center">
+                                {payment.payment_method === 'online' && payment.transaction_id ? (
+                                  <Button
+                                    onClick={() => handleDownloadReceipt(payment, 'bid_application')}
+                                    disabled={downloadingReceipts.has(payment.id)}
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-teal-300 text-teal-700 hover:bg-teal-50 hover:border-teal-400"
+                                  >
+                                    {downloadingReceipts.has(payment.id) ? (
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                      <Receipt className="w-4 h-4" />
+                                    )}
+                                  </Button>
+                                ) : (
+                                  <span className="text-xs text-gray-400">-</span>
+                                )}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         )
       )}

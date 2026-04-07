@@ -763,7 +763,7 @@ export function getPurchaseConfirmationEmailTemplate(
     unitPrice: number
   }>
 ) {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://ppisonline.com'
+  const purchasedDocumentsUrl = 'https://ebid.ppisonline.com/bidding-portal?tab=purchased-documents'
   
   // Always use USD for email display (we always charge in USD)
   const displayCurrency = 'USD'
@@ -873,7 +873,7 @@ export function getPurchaseConfirmationEmailTemplate(
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                 <tr>
                   <td style="text-align: center; padding: 20px 0;">
-                    <a href="${siteUrl}/bidding-portal?tab=purchased-documents" style="display: inline-block; padding: 15px 40px; background-color: #2CBCA6; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
+                    <a href="${purchasedDocumentsUrl}" style="display: inline-block; padding: 15px 40px; background-color: #2CBCA6; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
                       View & Download Documents
                     </a>
                   </td>
@@ -918,7 +918,7 @@ Total: ${formattedAmount}
 
 You can now access and download your purchased documents from your account dashboard.
 
-View & Download Documents: ${siteUrl}/bidding-portal?tab=purchased-documents
+View & Download Documents: ${purchasedDocumentsUrl}
 
 If you have any questions about your purchase, please don't hesitate to contact our support team.
 

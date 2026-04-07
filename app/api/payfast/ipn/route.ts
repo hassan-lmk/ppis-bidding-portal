@@ -49,9 +49,9 @@ export async function POST (req: NextRequest) {
     const paymentName = body.PaymentName as string || ''
     const discountedAmount = Number(body.discounted_amount || 0)
 
-    // Use shared Supabase admin client with TLS handling
-    const { supabaseAdmin } = await import('../../../lib/supabase')
-    const supabase = supabaseAdmin
+    // PayFast has no user JWT; RLS requires service role for writes (key is server-only, not public).
+    const { createServiceRoleClient } = await import('../../_supabaseAdmin')
+    const supabase = createServiceRoleClient()
 
     // Save IPN data to payfast_ipn_logs table FIRST (before any processing)
     // This ensures we have a record of all IPN requests, even if processing fails

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '../../../../../lib/supabase'
 import crypto from 'crypto'
 
 // Force dynamic to avoid build-time initialization issues
@@ -13,6 +12,9 @@ export async function POST(
   const { id } = await params
   
   try {
+    const { createServiceRoleClient } = await import('../../../../_supabaseAdmin')
+    const supabase = createServiceRoleClient()
+
     const formData = await request.formData()
     
     // Extract IPN parameters
@@ -36,7 +38,7 @@ export async function POST(
 
     // Log IPN for debugging
     try {
-      await (supabaseAdmin as any).from('payfast_ipn_logs').insert({
+      await supabase.from('payfast_ipn_logs').insert({
         basket_id: basketId,
         transaction_id: transactionId,
         err_code: errCode,
@@ -83,7 +85,7 @@ export async function POST(
     }
 
     // Get the application
-    const { data: app } = await (supabaseAdmin as any)
+    const { data: app } = await supabase
       .from('bid_applications')
       .select('*')
       .eq('id', id)
@@ -100,7 +102,7 @@ export async function POST(
     // Update application based on payment result
     if (errCode === '000') {
       // Payment successful
-      await (supabaseAdmin as any)
+      await supabase
         .from('bid_applications')
         .update({
           application_fee_status: 'paid',
@@ -114,7 +116,7 @@ export async function POST(
       console.log('[Bid Payment IPN] Payment successful for application:', id)
     } else {
       // Payment failed - still save raw_payload for audit
-      await (supabaseAdmin as any)
+      await supabase
         .from('bid_applications')
         .update({
           application_fee_status: 'failed',

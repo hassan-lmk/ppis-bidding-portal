@@ -128,6 +128,27 @@ const customFetch = async (input: RequestInfo | URL, init?: RequestInit): Promis
 
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
+/** Server-only Supabase secret. Never use NEXT_PUBLIC_* for this key. */
+const serviceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim()
+
+/**
+ * Bypasses RLS. Use only from trusted server routes (e.g. PayFast IPN) where no user session exists.
+ * Requires `SUPABASE_SERVICE_ROLE_KEY` in the server environment.
+ */
+export function createServiceRoleClient() {
+  if (!serviceRoleKey) {
+    throw new Error(
+      'Missing SUPABASE_SERVICE_ROLE_KEY. Server webhooks (PayFast IPN, etc.) need this key set only on the server — never as a NEXT_PUBLIC_ variable.'
+    )
+  }
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: {
+      fetch: customFetch,
+    },
+  })
+}
+
 // Uses the anon key; RLS is enforced on Supabase.
 export const supabaseAdmin = createClient(
   supabaseUrl,

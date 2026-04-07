@@ -10,8 +10,8 @@ export async function POST (req: NextRequest) {
       return NextResponse.json({ error: 'Must provide order_id or basket_id' }, { status: 400 })
     }
 
-    const { supabaseAdmin } = await import('../../../lib/supabase')
-    const supabase = supabaseAdmin
+    const { createServiceRoleClient } = await import('../../_supabaseAdmin')
+    const supabase = createServiceRoleClient()
 
     // Find the order
     let order
