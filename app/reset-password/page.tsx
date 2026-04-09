@@ -3,13 +3,17 @@
 import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import Image from 'next/image'
+import { ArrowLeft, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import PasswordRequirements from '../components/PasswordRequirements'
 import { passwordMeetsPolicy, passwordPolicyErrorMessage } from '../lib/password-policy'
 
 type Step = 'email' | 'otp' | 'new-password'
+
+const inputClass =
+  'w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#317070]/25 focus:border-[#317070] transition-shadow disabled:opacity-60'
 
 function ResetPasswordContent() {
   const searchParams = useSearchParams()
@@ -124,78 +128,130 @@ function ResetPasswordContent() {
   }
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center py-12 md:py-16">
-      <div className="absolute inset-0 w-full h-full z-0">
-        <img src="/images/Banner-2.webp" alt="Reset Password Banner" className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-black/60" />
+    <div className="min-h-screen bg-slate-100 w-full grid grid-cols-1 lg:grid-cols-2">
+      {/* Left: visual panel */}
+      <div className="relative order-2 lg:order-1 min-h-[620px] lg:min-h-full overflow-hidden flex flex-col justify-between px-8 py-8 md:px-10 md:py-10 lg:pl-12 lg:pr-0 lg:py-12 xl:pl-16 xl:pr-0 xl:py-16 text-white bg-gradient-to-br from-[#317070] via-teal-700 to-teal-900">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.12]"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Ccircle cx='8' cy='8' r='1.5'/%3E%3Ccircle cx='30' cy='8' r='1.5'/%3E%3Ccircle cx='52' cy='8' r='1.5'/%3E%3Ccircle cx='8' cy='30' r='1.5'/%3E%3Ccircle cx='30' cy='30' r='1.5'/%3E%3Ccircle cx='52' cy='30' r='1.5'/%3E%3Ccircle cx='8' cy='52' r='1.5'/%3E%3Ccircle cx='30' cy='52' r='1.5'/%3E%3Ccircle cx='52' cy='52' r='1.5'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+          }}
+        />
+
+        <div className="relative z-10 space-y-4">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/login"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-white border border-white/35 bg-white/10 shadow-sm hover:bg-white/20 transition-colors"
+              aria-label="Back to login"
+            >
+              <ArrowLeft className="h-5 w-5" aria-hidden />
+            </Link>
+            <Image
+              src="/images/logo.webp"
+              alt="PPIS"
+              width={150}
+              height={48}
+              className="h-9 w-auto"
+            />
+          </div>
+          <h2 className="text-2xl md:text-3xl font-bold leading-tight max-w-xl">
+            Reset your password securely and regain access to your bidding portal account.
+          </h2>
+          <p className="text-sm md:text-base text-teal-100/95 max-w-md leading-relaxed">
+            Verify your email with a one-time code, then set a new password to continue your workflow.
+          </p>
+        </div>
+
+        <div className="relative z-10 mt-8 lg:mt-auto w-full flex justify-end items-end">
+          <div className="relative h-[300px] md:h-[400px] lg:h-[62vh] xl:h-[68vh] w-[130%] lg:w-[150%] ml-auto">
+            <Image
+              src="/images/signup-mockup-image.png"
+              alt="Bidding portal preview"
+              fill
+              className="object-contain object-[right_bottom]"
+              sizes="(min-width: 1024px) 50vw, 100vw"
+              priority={false}
+            />
+          </div>
+        </div>
       </div>
 
-      <div className="relative z-10 w-full flex items-center justify-center px-4">
+      {/* Right: reset form */}
+      <div className="order-1 lg:order-2 flex flex-col justify-center bg-white px-8 pb-8 pt-5 md:px-10 md:pb-10 md:pt-6 lg:px-12 lg:pb-10 lg:pt-8 xl:px-20 2xl:px-28 lg:min-h-full">
         <form
           onSubmit={step === 'email' ? handleEmailSubmit : step === 'otp' ? handleOTPSubmit : handlePasswordSubmit}
-          className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full space-y-6"
+          className="mx-auto w-full max-w-md lg:max-w-lg xl:max-w-xl space-y-5"
         >
-          <div className="text-center">
+          <div className="space-y-4">
             {step === 'email' && (
-              <>
-                <h2 className="text-3xl font-bold text-gray-900 mb-2">Reset Your Password</h2>
-                <p className="text-gray-500 mb-6">Enter your email to receive a verification code</p>
-              </>
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">Reset your password</h1>
+                <p className="text-gray-500 text-sm mt-2 leading-relaxed">
+                  Enter your account email to receive a verification code.
+                </p>
+              </div>
             )}
             {step === 'otp' && (
-              <>
-                <h2 className="text-3xl font-bold text-gray-900 mb-2">Enter Verification Code</h2>
-                <p className="text-gray-500 mb-6">Check your email for the verification code</p>
-              </>
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">Enter verification code</h1>
+                <p className="text-gray-500 text-sm mt-2 leading-relaxed">
+                  Check your inbox and enter the 6-digit code.
+                </p>
+              </div>
             )}
             {step === 'new-password' && (
-              <>
-                <h2 className="text-3xl font-bold text-gray-900 mb-2">Create New Password</h2>
-                <p className="text-gray-500 mb-6">Enter your new password below</p>
-              </>
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">Create new password</h1>
+                <p className="text-gray-500 text-sm mt-2 leading-relaxed">
+                  Choose a strong password to secure your account.
+                </p>
+              </div>
             )}
           </div>
 
-          {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
-          {success && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">{success}</div>}
+          {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">{error}</div>}
+          {success && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm">{success}</div>}
 
           {step === 'email' && (
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">Email Address</label>
               <input
                 id="email"
                 type="email"
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                className={inputClass}
                 required
-                placeholder="you@example.com"
+                placeholder="you@yourcompany.com"
+                disabled={loading}
               />
             </div>
           )}
 
           {step === 'otp' && (
             <div>
-              <label htmlFor="otp" className="block text-sm font-medium text-gray-700 mb-1">Verification Code</label>
+              <label htmlFor="otp" className="block text-sm font-medium text-gray-700 mb-1.5">Verification Code</label>
               <input
                 id="otp"
                 type="text"
                 value={otp}
-                onChange={(e) => setOtp(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-center text-2xl tracking-widest"
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                className={`${inputClass} text-center text-2xl tracking-[0.35em] font-mono py-3`}
                 required
                 placeholder="000000"
                 maxLength={6}
+                disabled={loading}
               />
-              <p className="text-sm text-gray-500 mt-2 text-center">Enter the verification code from your email</p>
+              <p className="text-sm text-gray-500 mt-2 text-center">Enter the verification code from your email.</p>
             </div>
           )}
 
           {step === 'new-password' && (
             <>
               <div>
-                <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1.5">New Password</label>
                 <div className="relative">
                   <input
                     id="newPassword"
@@ -203,23 +259,25 @@ function ResetPasswordContent() {
                     autoComplete="new-password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    className={`${inputClass} pr-10`}
                     required
+                    disabled={loading}
+                    placeholder="••••••••"
                   />
                   <button
                     type="button"
                     onClick={() => setShowNewPassword((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 rounded-md"
                     aria-label={showNewPassword ? 'Hide password' : 'Show password'}
                   >
-                    {showNewPassword ? <Eye className="h-5 w-5" /> : <EyeOff className="h-5 w-5" />}
+                    {showNewPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
                 </div>
-                <PasswordRequirements password={newPassword} className="mt-2" />
+                <PasswordRequirements password={newPassword} columns={2} className="mt-3" />
               </div>
 
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1.5">Confirm New Password</label>
                 <div className="relative">
                   <input
                     id="confirmPassword"
@@ -227,16 +285,18 @@ function ResetPasswordContent() {
                     autoComplete="new-password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    className={`${inputClass} pr-10`}
                     required
+                    disabled={loading}
+                    placeholder="••••••••"
                   />
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 rounded-md"
                     aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                   >
-                    {showConfirmPassword ? <Eye className="h-5 w-5" /> : <EyeOff className="h-5 w-5" />}
+                    {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
                 </div>
               </div>
@@ -246,7 +306,7 @@ function ResetPasswordContent() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-teal-600 text-white font-semibold rounded-lg shadow-md hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full py-3.5 rounded-xl bg-[#317070] text-white font-semibold shadow-md hover:bg-[#285e5e] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {loading ? (
               <>
@@ -271,14 +331,14 @@ function ResetPasswordContent() {
                   router.push('/login')
                 }
               }}
-              className="text-teal-600 hover:text-teal-700 font-medium transition-colors"
+              className="text-[#317070] hover:text-[#285e5e] font-medium transition-colors"
             >
               {step === 'email' ? 'Back to login' : 'Back'}
             </button>
           </div>
 
-          <div className="text-center">
-            <Link href="/login" className="text-sm text-gray-500 hover:text-gray-700">Return to Login</Link>
+          <div className="pt-6 border-t border-gray-100 text-center text-sm text-gray-600">
+            <Link href="/login" className="text-[#317070] hover:text-[#285e5e] font-semibold">Return to login</Link>
           </div>
         </form>
       </div>

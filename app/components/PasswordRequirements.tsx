@@ -11,6 +11,7 @@ import {
 type PasswordRequirementsProps = {
   password: string
   className?: string
+  columns?: 1 | 2
 }
 
 const RULES: { key: keyof ReturnType<typeof getPasswordRulesStatus>; label: string }[] = [
@@ -21,11 +22,18 @@ const RULES: { key: keyof ReturnType<typeof getPasswordRulesStatus>; label: stri
   { key: 'special', label: 'One special character (!@#$%^&* etc.)' },
 ]
 
-export default function PasswordRequirements({ password, className }: PasswordRequirementsProps) {
+export default function PasswordRequirements({ password, className, columns = 1 }: PasswordRequirementsProps) {
   const status = getPasswordRulesStatus(password)
 
   return (
-    <ul className={cn('space-y-2 text-left', className)} aria-live="polite">
+    <ul
+      className={cn(
+        'text-left',
+        columns === 2 ? 'grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2' : 'space-y-2',
+        className
+      )}
+      aria-live="polite"
+    >
       {RULES.map(({ key, label }) => {
         const done = status[key]
         return (

@@ -4,10 +4,15 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import Link from 'next/link'
+import Image from 'next/image'
+import { ArrowLeft, Loader2 } from 'lucide-react'
 import CompanyNameAutocomplete from '../components/CompanyNameAutocomplete'
 
 /** Bidding portal onboarding always registers users as bidders. */
 const ONBOARDING_USER_TYPE = 'bidder' as const
+
+const inputClass =
+  'w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#317070]/25 focus:border-[#317070] transition-shadow disabled:opacity-60'
 
 export default function OnboardingPage() {
   const [companyName, setCompanyName] = useState('')
@@ -228,97 +233,91 @@ export default function OnboardingPage() {
 
   if (checkingStatus) {
     return (
-      <div className="relative min-h-screen flex items-center justify-center py-12 md:py-16">
-        <div className="absolute inset-0 w-full h-full z-0">
-          <img src="/images/Banner-2.webp" alt="Onboarding Banner" className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-black/60" />
-        </div>
-        <div className="relative z-20 w-full flex items-center justify-center px-4">
-          <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full space-y-6">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600 mx-auto mb-4"></div>
-              <p className="text-gray-500">Checking your profile...</p>
-            </div>
-          </div>
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-10 h-10 animate-spin text-[#317070] mx-auto mb-3" />
+          <p className="text-gray-600">Checking your profile...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center py-12 md:py-16">
-      {/* Header */}
-      <div className="absolute top-0 left-0 right-0 z-30 bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/bidding-portal" className="text-teal-600 font-semibold text-lg">
-            PPIS Bidding Portal
-          </Link>
+    <div className="min-h-screen bg-slate-100 w-full grid grid-cols-1 lg:grid-cols-2">
+      {/* Left: visual panel */}
+      <div className="relative order-2 lg:order-1 min-h-[620px] lg:min-h-full overflow-hidden flex flex-col justify-between px-8 py-8 md:px-10 md:py-10 lg:pl-12 lg:pr-0 lg:py-12 xl:pl-16 xl:pr-0 xl:py-16 text-white bg-gradient-to-br from-[#317070] via-teal-700 to-teal-900">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.12]"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Ccircle cx='8' cy='8' r='1.5'/%3E%3Ccircle cx='30' cy='8' r='1.5'/%3E%3Ccircle cx='52' cy='8' r='1.5'/%3E%3Ccircle cx='8' cy='30' r='1.5'/%3E%3Ccircle cx='30' cy='30' r='1.5'/%3E%3Ccircle cx='52' cy='30' r='1.5'/%3E%3Ccircle cx='8' cy='52' r='1.5'/%3E%3Ccircle cx='30' cy='52' r='1.5'/%3E%3Ccircle cx='52' cy='52' r='1.5'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+          }}
+        />
+
+        <div className="relative z-10 space-y-4">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/bidding-portal"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-white border border-white/35 bg-white/10 shadow-sm hover:bg-white/20 transition-colors"
+              aria-label="Back to portal"
+            >
+              <ArrowLeft className="h-5 w-5" aria-hidden />
+            </Link>
+            <Image
+              src="/images/logo.webp"
+              alt="PPIS"
+              width={150}
+              height={48}
+              className="h-9 w-auto"
+            />
+          </div>
+          <h2 className="text-2xl md:text-3xl font-bold leading-tight max-w-xl">
+            Complete your profile to activate your bidder access and continue in the portal.
+          </h2>
+          <p className="text-sm md:text-base text-teal-100/95 max-w-md leading-relaxed">
+            Add your organization details once to enable document purchase and bid submission workflows.
+          </p>
+        </div>
+
+        <div className="relative z-10 mt-8 lg:mt-auto w-full flex justify-end items-end">
+          <div className="relative h-[300px] md:h-[400px] lg:h-[62vh] xl:h-[68vh] w-[130%] lg:w-[150%] ml-auto">
+            <Image
+              src="/images/signup-mockup-image.png"
+              alt="Bidding portal preview"
+              fill
+              className="object-contain object-[right_bottom]"
+              sizes="(min-width: 1024px) 50vw, 100vw"
+              priority={false}
+            />
+          </div>
         </div>
       </div>
 
-      {/* Background Image */}
-      <div className="absolute inset-0 w-full h-full z-0">
-        <img src="/images/Banner-2.webp" alt="Onboarding Banner" className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-black/60" />
-      </div>
-      
-      {/* Centered Form */}
-      <div className="relative z-20 w-full flex items-center justify-center px-4 mt-20">
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-xl p-8 max-w-lg w-full space-y-6 max-h-[90vh] overflow-y-auto">
-          <div className="text-center">
-            <div className="mb-4">
-              <div className="w-16 h-16 bg-teal-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              </div>
+      {/* Right: onboarding form */}
+      <div className="order-1 lg:order-2 flex flex-col justify-center bg-white px-8 pb-8 pt-5 md:px-10 md:pb-10 md:pt-6 lg:px-12 lg:pb-10 lg:pt-8 xl:px-20 2xl:px-28 lg:min-h-full">
+        <form onSubmit={handleSubmit} className="mx-auto w-full max-w-md lg:max-w-lg xl:max-w-xl space-y-5">
+          <div className="space-y-4">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">
+                Complete your profile
+              </h1>
+              <p className="text-gray-500 text-sm mt-2 leading-relaxed">
+                We need a few details to finish setting up your bidder account.
+              </p>
             </div>
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">
-              Complete Your Profile
-            </h2>
-            <p className="text-gray-500 mb-2">
-              We need a few more details to set up your bidder account
-            </p>
-            <p className="text-sm text-teal-800 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2 text-left">
+            <p className="text-sm text-teal-800 bg-teal-50 border border-teal-100 rounded-xl px-3 py-2 text-left">
               You are registering on the <span className="font-semibold">Bidding Portal</span> — your access type is{' '}
-              <span className="font-semibold">Bidder</span>. Complete your organisation details below.
+              <span className="font-semibold">Bidder</span>. Complete your organization details below.
             </p>
-          </div>
-
-          {/* Progress Indicator */}
-          <div className="bg-gray-100 rounded-lg p-4 mb-6">
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center text-green-600">
-                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                <span className="font-medium">Email Verified</span>
-              </div>
-              <div className="text-gray-400">→</div>
-              <div className="flex items-center text-teal-600 font-medium">
-                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-2a6 6 0 100-12 6 6 0 000 12z" clipRule="evenodd" />
-                </svg>
-                <span>Profile Setup</span>
-              </div>
-              <div className="text-gray-400">→</div>
-              <div className="flex items-center text-teal-600 font-medium">
-                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                <span>Portal access</span>
-              </div>
-            </div>
           </div>
 
           {error && (
-            <div className="bg-red-100 text-red-700 px-4 py-3 rounded-lg text-center">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
               {error}
             </div>
           )}
 
           {success && (
-            <div className="bg-green-100 text-green-700 px-4 py-3 rounded-lg text-center">
+            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm">
               {success}
             </div>
           )}
@@ -329,17 +328,18 @@ export default function OnboardingPage() {
             disabled={loading}
             label="Company name"
             helperText="Select from the list or type to search. You can also enter a custom company name."
+            ringClass="focus:ring-[#317070]"
           />
 
           <div>
-            <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1.5">
               Company Address <span className="text-red-500">*</span>
             </label>
             <textarea
               id="address"
               value={address}
               onChange={e => setAddress(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent resize-none"
+              className={`${inputClass} resize-none`}
               placeholder="Enter your company address"
               rows={3}
               required
@@ -348,7 +348,7 @@ export default function OnboardingPage() {
           </div>
 
           <div>
-            <label htmlFor="pocContactNumber" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="pocContactNumber" className="block text-sm font-medium text-gray-700 mb-1.5">
               Point of Contact Number <span className="text-red-500">*</span>
             </label>
             <input
@@ -356,10 +356,10 @@ export default function OnboardingPage() {
               type="tel"
               value={pocContactNumber}
               onChange={handleContactNumberChange}
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent ${
+              className={`w-full px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:border-transparent ${
                 contactNumberError 
-                  ? 'border-red-500 focus:ring-red-500' 
-                  : 'border-gray-300 focus:ring-teal-600'
+                  ? 'border-red-500 focus:ring-red-500 bg-white' 
+                  : 'border-gray-200 focus:ring-[#317070]/25 focus:border-[#317070] bg-white'
               }`}
               placeholder="+92 XXX XXXXXXX"
               required
@@ -379,7 +379,7 @@ export default function OnboardingPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-teal-600 text-white font-semibold rounded-lg shadow-md hover:bg-teal-700 transition-colors text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-3.5 rounded-xl bg-[#317070] text-white font-semibold shadow-md hover:bg-[#285e5e] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Completing Profile...' : 'Complete Profile'}
           </button>

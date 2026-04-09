@@ -398,7 +398,7 @@ export default function InteractiveMapPortal({
       <div ref={mapRef} className="h-full w-full rounded-xl" />
 
       {/* Legend */}
-      <div className="absolute top-4 left-4 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-3 z-[1000] border border-gray-200">
+      <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-3 z-[1000] border border-gray-200">
         <p className="text-xs font-semibold text-gray-800 mb-2">Legend</p>
         <div className="space-y-1">
           <div className="flex items-center space-x-2">
@@ -414,11 +414,6 @@ export default function InteractiveMapPortal({
             <span className="text-xs text-gray-700">Selected</span>
           </div>
         </div>
-      </div>
-
-      {/* Block Count */}
-      <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg px-4 py-2 z-[1000] border border-gray-200">
-        <p className="text-sm font-semibold text-gray-800">{areas.length} Open Blocks</p>
       </div>
 
       {/* Selected Area Panel */}
