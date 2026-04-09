@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase'
 import { CheckCircle2, XCircle, Loader2, Receipt, ArrowRight, ShoppingBag, Download, Home, Shield, Lock, AlertTriangle, RefreshCw, Mail } from 'lucide-react'
 import { useCart } from '../../lib/cart-context'
 import { generatePaymentReceipt, PaymentReceiptData } from '../../lib/receipt-generator'
+import { downloadAreaDocument } from '../../lib/bidding-api'
 import Link from 'next/link'
 
 /* ─── Confetti Component ─── */
@@ -237,6 +238,7 @@ function PayfastReturnContent() {
   const [cartCleared, setCartCleared] = useState(false)
   const [orderData, setOrderData] = useState<any>(null)
   const [downloadingReceipt, setDownloadingReceipt] = useState(false)
+  const [downloadingDocuments, setDownloadingDocuments] = useState(false)
   const [verificationStep, setVerificationStep] = useState(0)
   const [showConfetti, setShowConfetti] = useState(false)
 
@@ -476,34 +478,67 @@ function PayfastReturnContent() {
     }
   }, [orderData])
 
+  const handleDownloadBiddingDocuments = useCallback(async () => {
+    if (!orderData?.order_items?.length) return
+
+    setDownloadingDocuments(true)
+    try {
+      const uniqueAreaIds = Array.from(
+        new Set(
+          orderData.order_items
+            .map((item: any) => item?.area_id)
+            .filter(Boolean)
+        )
+      ) as string[]
+
+      if (uniqueAreaIds.length === 0) {
+        alert('No purchased bidding documents were found for this order.')
+        return
+      }
+
+      for (const areaId of uniqueAreaIds) {
+        const result = await downloadAreaDocument(areaId)
+
+        if (result.signedUrl) {
+          const link = document.createElement('a')
+          link.href = result.signedUrl
+          link.target = '_blank'
+          link.rel = 'noopener noreferrer'
+          if (result.downloadName) {
+            link.download = result.downloadName
+          }
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          continue
+        }
+
+        if (result.blob) {
+          const fileName = `bidding_document_${areaId.slice(0, 8)}.pdf`
+          const url = window.URL.createObjectURL(result.blob)
+          const link = document.createElement('a')
+          link.href = url
+          link.download = fileName
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          window.URL.revokeObjectURL(url)
+          continue
+        }
+
+        throw new Error('No download data received')
+      }
+    } catch (error) {
+      console.error('Error downloading bidding documents:', error)
+      alert('Failed to download bidding document(s). Please try again.')
+    } finally {
+      setDownloadingDocuments(false)
+    }
+  }, [orderData])
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-teal-50/40">
       {showConfetti && <Confetti />}
-
-      {/* Header */}
-      <header className="bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-100 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/bidding-portal" className="flex items-center space-x-2 group">
-              <img
-                src="/images/PPIS-logo-bg.png"
-                alt="PPIS Logo"
-                className="h-10 w-auto"
-              />
-              <span className="font-semibold text-gray-900 hidden sm:inline group-hover:text-teal-600 transition-colors">
-                Bidding Portal
-              </span>
-            </Link>
-            <Link
-              href="https://ppisonline.com"
-              className="text-sm text-gray-500 hover:text-teal-600 flex items-center gap-1.5 transition-colors"
-            >
-              <Home className="w-4 h-4" />
-              <span className="hidden sm:inline">Return to Website</span>
-            </Link>
-          </div>
-        </div>
-      </header>
 
       {/* Hero Banner */}
       <div className={`relative overflow-hidden transition-all duration-700 ${
@@ -608,6 +643,23 @@ function PayfastReturnContent() {
               <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 md:p-8">
                 <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
                   <button
+                    onClick={handleDownloadBiddingDocuments}
+                    disabled={downloadingDocuments || !orderData?.order_items?.length}
+                    className="w-full sm:w-auto group relative overflow-hidden bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 text-white font-semibold py-3.5 px-7 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {downloadingDocuments ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span>Preparing Document(s)...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-5 h-5 group-hover:animate-bounce" />
+                        <span>Download Bidding Document(s)</span>
+                      </>
+                    )}
+                  </button>
+                  <button
                     onClick={handleDownloadReceipt}
                     disabled={downloadingReceipt || !orderData}
                     className="w-full sm:w-auto group bg-white border-2 border-teal-500 text-teal-700 font-semibold py-3.5 px-7 rounded-xl hover:bg-teal-50 hover:border-teal-600 hover:shadow-md transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -626,7 +678,7 @@ function PayfastReturnContent() {
                   </button>
                   <button
                     onClick={() => router.push('/bidding-portal')}
-                    className="w-full sm:w-auto group relative overflow-hidden bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 text-white font-semibold py-3.5 px-7 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center space-x-2"
+                    className="w-full sm:w-auto group bg-white border-2 border-teal-500 text-teal-700 font-semibold py-3.5 px-7 rounded-xl hover:bg-teal-50 hover:border-teal-600 hover:shadow-md transition-all duration-200 flex items-center justify-center space-x-2"
                   >
                     <ShoppingBag className="w-5 h-5" />
                     <span>Go to Bidding Portal</span>
