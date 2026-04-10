@@ -3,6 +3,7 @@ import { Figtree } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from './lib/auth'
 import { CartProvider } from './lib/cart-context'
+import { QueryProvider } from './components/providers/query-provider'
 
 const figtree = Figtree({ 
   subsets: ['latin'],
@@ -33,9 +34,11 @@ export default function RootLayout({
     <html lang="en" className={figtree.variable}>
       <body className="antialiased">
         <AuthProvider>
-          <CartProvider>
-            {children}
-          </CartProvider>
+          <QueryProvider>
+            <CartProvider>
+              {children}
+            </CartProvider>
+          </QueryProvider>
         </AuthProvider>
       </body>
     </html>

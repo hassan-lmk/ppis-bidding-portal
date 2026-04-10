@@ -255,6 +255,7 @@ export default function BidSubmissionPage({
   const [challanNumber, setChallanNumber] = useState('')
   const [challanDate, setChallanDate] = useState('')
   const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null)
+  const [paymentProofAgreementChecked, setPaymentProofAgreementChecked] = useState(false)
   const [uploadingProof, setUploadingProof] = useState(false)
   
   // Step 3 documents state
@@ -843,6 +844,10 @@ export default function BidSubmissionPage({
       setError('Please fill all payment details')
       return
     }
+    if (!paymentProofAgreementChecked) {
+      setError('Please confirm the payment proof agreement to continue')
+      return
+    }
 
     try {
       setSaving(true)
@@ -1307,7 +1312,7 @@ export default function BidSubmissionPage({
         activeTab="bid-submission" 
         title="Loading..."
         showBackButton
-        backHref="/bidding-portal?tab=purchased-documents"
+        backHref="/bidding-portal/purchased-documents"
         backLabel="Back to Documents"
       >
         <div className="flex items-center justify-center min-h-[60vh]">
@@ -1354,7 +1359,7 @@ export default function BidSubmissionPage({
         activeTab="bid-submission" 
         title="Cannot Apply"
         showBackButton
-        backHref="/bidding-portal?tab=purchased-documents"
+        backHref="/bidding-portal/purchased-documents"
         backLabel="Back to Documents"
       >
         <div className="max-w-4xl mx-auto">
@@ -1403,7 +1408,7 @@ export default function BidSubmissionPage({
       title={`Bid Submission - ${areaDetails?.name || ''}`}
       subtitle={`${areaDetails?.zones?.blocks?.name || ''} • ${areaDetails?.code || ''} ${deadlineText ? `• ${deadlineText}` : ''}`}
       showBackButton
-      backHref="/bidding-portal?tab=purchased-documents"
+      backHref="/bidding-portal/purchased-documents"
       backLabel="Back to Documents"
     >
 
@@ -1801,7 +1806,7 @@ export default function BidSubmissionPage({
                           <CreditCard className="w-8 h-8 text-teal-600" />
                           <div>
                             <p className="font-medium text-gray-900">Online Payment</p>
-                            <p className="text-sm text-gray-500">Pay via PayFast gateway</p>
+                            <p className="text-sm text-gray-500">Pay via Credit/Debit Card or bank transfer</p>
                           </div>
                         </div>
                       </div>
@@ -1898,6 +1903,21 @@ export default function BidSubmissionPage({
                           </div>
                         )}
                       </div>
+
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                        <label className="flex items-start gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={paymentProofAgreementChecked}
+                            onChange={(e) => setPaymentProofAgreementChecked(e.target.checked)}
+                            className="mt-1 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                          />
+                          <span className="text-sm text-amber-900 leading-relaxed">
+                            I agree that this payment proof is genuine and that payment has been made through draft/Bank Challan.
+                            In case of wrong submission, my application may be cancelled at any stage.
+                          </span>
+                        </label>
+                      </div>
                     </div>
                   )}
                 </>
@@ -1916,7 +1936,7 @@ export default function BidSubmissionPage({
                     <ChevronRight className="w-4 h-4 ml-2" />
                   </Button>
                 ) : paymentMethod === 'online' ? (
-                  <Button onClick={initiateOnlinePayment} disabled={saving}>
+                  <Button onClick={initiateOnlinePayment} disabled={saving} className="text-white">
                     {saving ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -1930,7 +1950,7 @@ export default function BidSubmissionPage({
                     )}
                   </Button>
                 ) : paymentMethod === 'bank_challan' ? (
-                  <Button onClick={saveStep2Challan} disabled={saving || uploadingProof}>
+                  <Button onClick={saveStep2Challan} disabled={saving || uploadingProof || !paymentProofAgreementChecked}>
                     {saving ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />

@@ -196,7 +196,7 @@ export default function TicketDetailPage() {
         activeTab="support" 
         title="Loading..."
         showBackButton
-        backHref="/bidding-portal?tab=support"
+        backHref="/bidding-portal/support"
         backLabel="Back to Tickets"
       >
         <div className="flex items-center justify-center min-h-[400px]">
@@ -212,7 +212,7 @@ export default function TicketDetailPage() {
         activeTab="support" 
         title="Error"
         showBackButton
-        backHref="/bidding-portal?tab=support"
+        backHref="/bidding-portal/support"
         backLabel="Back to Tickets"
       >
         <Card>
@@ -220,7 +220,7 @@ export default function TicketDetailPage() {
             <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Ticket Not Found</h3>
             <p className="text-gray-500 mb-6">{error}</p>
-            <Button onClick={() => router.push('/bidding-portal?tab=support')}>
+            <Button onClick={() => router.push('/bidding-portal/support')}>
               Back to Tickets
             </Button>
           </CardContent>
@@ -237,7 +237,7 @@ export default function TicketDetailPage() {
       title={`Ticket #${ticket.ticket_number}`}
       subtitle={ticket.subject}
       showBackButton
-      backHref="/bidding-portal?tab=support"
+      backHref="/bidding-portal/support"
       backLabel="Back to Tickets"
     >
       <div className="max-w-4xl mx-auto space-y-6">

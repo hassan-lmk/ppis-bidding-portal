@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
@@ -12,28 +12,61 @@ interface OnboardingGuardProps {
 
 /**
  * Portal access rule: user may use the bidding portal only when
- * `user_profiles.onboarding_completed` is true. No admin approval check.
+ * `user_profiles.onboarding_completed` is true.
+ *
+ * - If auth context already has onboarding_completed, render children immediately (no full-screen gate).
+ * - Avoid re-running verification on pathname-only changes (e.g. tab routes under /bidding-portal).
  */
 export default function OnboardingGuard({ children }: OnboardingGuardProps) {
   const { user, loading: authLoading, userProfile, adminChecked } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
-  const [checking, setChecking] = useState(true)
+  const [verifying, setVerifying] = useState(false)
+  const ranForUserRef = useRef<string | null>(null)
+
+  const isExempt =
+    pathname === '/onboarding' || pathname === '/pending-approval'
+
+  const contextOk = userProfile?.onboarding_completed === true
+
+  useLayoutEffect(() => {
+    if (isExempt) return
+    if (authLoading || !adminChecked) return
+    if (!user) return
+    if (contextOk) {
+      setVerifying(false)
+      return
+    }
+    setVerifying(true)
+  }, [isExempt, authLoading, adminChecked, user, contextOk])
 
   useEffect(() => {
-    const checkOnboardingStatus = async () => {
-      if (pathname === '/onboarding' || pathname === '/pending-approval') {
-        setChecking(false)
-        return
-      }
+    if (isExempt) {
+      setVerifying(false)
+      return
+    }
 
-      if (authLoading || !adminChecked) return
+    if (authLoading || !adminChecked) return
 
-      if (!user) {
-        setChecking(false)
-        return
-      }
+    if (!user) {
+      setVerifying(false)
+      return
+    }
 
+    if (contextOk) {
+      setVerifying(false)
+      ranForUserRef.current = user.id
+      return
+    }
+
+    if (ranForUserRef.current === user.id) {
+      setVerifying(false)
+      return
+    }
+
+    let cancelled = false
+
+    const run = async () => {
       try {
         let profile = userProfile
 
@@ -44,6 +77,8 @@ export default function OnboardingGuard({ children }: OnboardingGuardProps) {
             .eq('id', user.id)
             .single()
 
+          if (cancelled) return
+
           if (error) {
             console.error('Error checking profile:', error)
             router.replace('/onboarding')
@@ -52,24 +87,34 @@ export default function OnboardingGuard({ children }: OnboardingGuardProps) {
           profile = data
         }
 
-        const onboardingDone = profile?.onboarding_completed === true
+        if (cancelled) return
 
-        if (!onboardingDone) {
+        if (profile?.onboarding_completed !== true) {
           router.replace('/onboarding')
           return
         }
 
-        setChecking(false)
+        ranForUserRef.current = user.id
       } catch (err) {
         console.error('Error checking onboarding status:', err)
-        router.replace('/onboarding')
+        if (!cancelled) router.replace('/onboarding')
+      } finally {
+        if (!cancelled) setVerifying(false)
       }
     }
 
-    checkOnboardingStatus()
-  }, [user, authLoading, userProfile, adminChecked, router, pathname])
+    void run()
 
-  if (checking || authLoading || !adminChecked) {
+    return () => {
+      cancelled = true
+    }
+  }, [user, authLoading, userProfile, adminChecked, router, isExempt, contextOk])
+
+  if (isExempt) {
+    return <>{children}</>
+  }
+
+  if (authLoading || !adminChecked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -82,6 +127,21 @@ export default function OnboardingGuard({ children }: OnboardingGuardProps) {
 
   if (!user) {
     return <>{children}</>
+  }
+
+  if (contextOk) {
+    return <>{children}</>
+  }
+
+  if (verifying) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-teal-600 mx-auto mb-4" />
+          <p className="text-gray-600">Checking account status...</p>
+        </div>
+      </div>
+    )
   }
 
   return <>{children}</>

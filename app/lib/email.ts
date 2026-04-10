@@ -763,7 +763,7 @@ export function getPurchaseConfirmationEmailTemplate(
     unitPrice: number
   }>
 ) {
-  const purchasedDocumentsUrl = 'https://ebid.ppisonline.com/bidding-portal?tab=purchased-documents'
+  const purchasedDocumentsUrl = 'https://ebid.ppisonline.com/bidding-portal/purchased-documents'
   
   // Always use USD for email display (we always charge in USD)
   const displayCurrency = 'USD'

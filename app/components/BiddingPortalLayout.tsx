@@ -3,8 +3,11 @@
 import { useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
+import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
+import { biddingPortalQueryKeys } from '../lib/bidding-portal-query-keys'
+import { fetchPortalSidebarCounts } from '../lib/fetch-portal-sidebar-counts'
 import { Button } from './ui/button'
 import { 
   Building2, Home, LogOut, User, Menu, X, FolderOpen, FileStack, 
@@ -12,7 +15,6 @@ import {
 } from 'lucide-react'
 import Image from 'next/image'
 import BiddingPortalNewsTicker from './BiddingPortalNewsTicker'
-import OnboardingGuard from './OnboardingGuard'
 
 export type PortalTab = 
   | 'opened-bidding' 
@@ -53,45 +55,51 @@ export default function BiddingPortalLayout({
 }: BiddingPortalLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [counts, setCounts] = useState({
+  /** Defer sidebar counts until after first paint to improve TTI */
+  const [sidebarCountsReady, setSidebarCountsReady] = useState(false)
+  const { user, loading: authLoading, signOut, userProfile } = useAuth()
+  const router = useRouter()
+  const pathname = usePathname()
+  const [companyName, setCompanyName] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!user?.id) {
+      setSidebarCountsReady(false)
+      return
+    }
+    const w = typeof window !== 'undefined' ? window : undefined
+    let cancelled = false
+    const run = () => {
+      if (!cancelled) setSidebarCountsReady(true)
+    }
+    let id: ReturnType<typeof setTimeout> | number
+    if (w && typeof w.requestIdleCallback === 'function') {
+      id = w.requestIdleCallback(run, { timeout: 1500 })
+    } else {
+      id = setTimeout(run, 1)
+    }
+    return () => {
+      cancelled = true
+      if (w && typeof w.cancelIdleCallback === 'function' && typeof id === 'number') {
+        w.cancelIdleCallback(id)
+      } else {
+        clearTimeout(id as ReturnType<typeof setTimeout>)
+      }
+    }
+  }, [user?.id])
+
+  const { data: counts = {
     openBlocks: 0,
     purchased: 0,
     submitted: 0,
     tickets: 0,
-    payments: 0
+    payments: 0,
+  } } = useQuery({
+    queryKey: biddingPortalQueryKeys.sidebarCounts(user?.id ?? ''),
+    queryFn: () => fetchPortalSidebarCounts(user!.id),
+    enabled: !!user?.id && sidebarCountsReady,
+    staleTime: 90_000,
   })
-  const { user, loading: authLoading, signOut, userProfile } = useAuth()
-  const router = useRouter()
-  const pathname = usePathname()
-  const [portalEnabled, setPortalEnabled] = useState<boolean | null>(null)
-  const [companyName, setCompanyName] = useState<string | null>(null)
-
-  // Check if bidding portal is enabled - using cached status
-  useEffect(() => {
-    let isMounted = true
-    
-    const checkPortalStatus = async () => {
-      try {
-        const { getBiddingPortalStatus } = await import('../lib/bidding-portal-cache')
-        const enabled = await getBiddingPortalStatus()
-        
-        if (isMounted) {
-          setPortalEnabled(enabled)
-        }
-      } catch (err) {
-        console.error('Error checking portal status:', err)
-        if (isMounted) {
-        setPortalEnabled(true) // Default to enabled if check fails
-        }
-      }
-    }
-    
-    checkPortalStatus()
-    
-    return () => {
-      isMounted = false
-    }
-  }, [])
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -101,28 +109,25 @@ export default function BiddingPortalLayout({
 
   useEffect(() => {
     if (user) {
-      fetchCounts()
-      fetchCompanyName()
+      void fetchCompanyName()
     }
   }, [user])
 
   const fetchCompanyName = async () => {
     if (!user) return
-    
-    // Use cached userProfile if available
+
     if (userProfile?.company_name) {
       setCompanyName(userProfile.company_name)
       return
     }
 
-    // Otherwise fetch from database
     try {
       const { data, error } = await supabase
         .from('user_profiles')
         .select('company_name')
         .eq('id', user.id)
         .single()
-      
+
       if (!error && data?.company_name) {
         setCompanyName(data.company_name)
       }
@@ -131,118 +136,46 @@ export default function BiddingPortalLayout({
     }
   }
 
-  const fetchCounts = async () => {
-    const userId = user?.id
-    if (!userId) return
-
-    try {
-      const [
-        { count: openCount },
-        { data: purchasedData },
-        { count: submittedCount },
-        { count: ticketsCount },
-        { count: paymentsCount },
-      ] = await Promise.all([
-        supabase
-          .from('areas')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'Open'),
-        supabase
-          .from('area_downloads')
-          .select('area_id')
-          .eq('user_id', userId)
-          .eq('payment_status', 'completed'),
-        supabase
-          .from('bid_applications')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .in('status', ['submitted', 'under_review', 'approved']),
-        supabase
-          .from('support_tickets')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .neq('status', 'closed'),
-        supabase
-          .from('bid_applications')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .in('application_fee_status', ['paid', 'verified']),
-      ])
-
-      let availableForSubmissionCount = 0
-      if (purchasedData && purchasedData.length > 0) {
-        const purchasedAreaIds = purchasedData.map((d: any) => d.area_id)
-        const { data: bidApps } = await supabase
-          .from('bid_applications')
-          .select('area_id, status')
-          .eq('user_id', userId)
-          .in('area_id', purchasedAreaIds)
-
-        const areaBidStatusMap: Record<string, string> = {}
-        if (bidApps) {
-          bidApps.forEach((app: any) => {
-            areaBidStatusMap[app.area_id] = app.status
-          })
-        }
-
-        availableForSubmissionCount = purchasedAreaIds.filter((areaId: string) => {
-          const bidStatus = areaBidStatusMap[areaId]
-          return !bidStatus || bidStatus === 'draft'
-        }).length
-      }
-
-      setCounts({
-        openBlocks: openCount || 0,
-        purchased: availableForSubmissionCount,
-        submitted: submittedCount || 0,
-        tickets: ticketsCount || 0,
-        payments: paymentsCount || 0,
-      })
-    } catch (err) {
-      console.error('Error fetching counts:', err)
-    }
-  }
-
   const sidebarItems: SidebarItem[] = [
     { 
       id: 'opened-bidding', 
       label: 'Purchase Bid Documents', 
       icon: FolderOpen,
-      href: '/bidding-portal?tab=opened-bidding',
+      href: '/bidding-portal/opened-bidding',
       count: counts.openBlocks
     },
     { 
       id: 'purchased-documents', 
       label: 'Submit Bid Application', 
       icon: FileStack,
-      href: '/bidding-portal?tab=purchased-documents',
+      href: '/bidding-portal/purchased-documents',
       count: counts.purchased
     },
     { 
       id: 'submitted-applications', 
       label: 'Bids Submitted', 
       icon: ClipboardCheck,
-      href: '/bidding-portal?tab=submitted-applications',
+      href: '/bidding-portal/submitted-applications',
       count: counts.submitted
     },
     { 
       id: 'payments', 
       label: 'Payment History', 
       icon: CreditCard,
-      href: '/bidding-portal?tab=payments'
+      href: '/bidding-portal/payments'
     },
     { 
       id: 'support', 
       label: 'Support Tickets', 
       icon: MessageSquare,
-      href: '/bidding-portal?tab=support',
+      href: '/bidding-portal/support',
       count: counts.tickets
     },
     {
       id: 'profile',
       label: 'Profile',
       icon: User,
-      href: '/bidding-portal?tab=profile',
+      href: '/bidding-portal/profile',
     },
   ]
 
@@ -284,7 +217,7 @@ export default function BiddingPortalLayout({
               </button>
             </div>
             <Link
-              href="/bidding-portal"
+              href="/bidding-portal/opened-bidding"
               className={`flex items-center justify-center mb-3 lg:mb-4 ${sidebarCollapsed ? 'px-1' : ''}`}
               title="Bidding Portal"
             >
@@ -324,7 +257,7 @@ export default function BiddingPortalLayout({
               return (
                 <Link
                   key={item.id}
-                  href={item.href || '/bidding-portal'}
+                  href={item.href || '/bidding-portal/opened-bidding'}
                   onClick={() => setSidebarOpen(false)}
                   title={sidebarCollapsed ? item.label : undefined}
                   className={`
@@ -365,7 +298,7 @@ export default function BiddingPortalLayout({
                   </div>
                   <div className="flex-1 min-w-0">
                     <Link
-                      href="/bidding-portal?tab=profile"
+                      href="/bidding-portal/profile"
                       className="text-[10px] lg:text-xs font-medium text-white truncate underline-offset-2 hover:underline"
                       title="View profile details"
                     >
@@ -465,9 +398,7 @@ export default function BiddingPortalLayout({
 
         {/* Content Area */}
         <div className="p-4 lg:p-6 w-full max-w-full overflow-x-hidden">
-          <OnboardingGuard>
-            {children}
-          </OnboardingGuard>
+          {children}
         </div>
       </main>
     </div>

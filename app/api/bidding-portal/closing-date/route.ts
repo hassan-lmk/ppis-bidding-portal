@@ -1,39 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '../../_supabaseAdmin'
+import { supabaseAdmin, createServerSupabaseClient } from '../../_supabaseAdmin'
 
 // Force dynamic to avoid build-time initialization issues
 export const dynamic = 'force-dynamic'
 
-// Get user from authorization header
-async function getUserFromRequest(request: NextRequest) {
+// Validate JWT and return user + token so DB queries run with RLS as that user
+async function getUserAndTokenFromRequest(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (!authHeader?.startsWith('Bearer ')) {
-    return null
+    return { user: null, token: null }
   }
-  
+
   const token = authHeader.substring(7)
   const { data: { user }, error } = await (supabaseAdmin as any).auth.getUser(token)
-  
+
   if (error || !user) {
-    return null
+    return { user: null, token: null }
   }
-  
-  return user
+
+  return { user, token }
 }
 
 // GET /api/bidding-portal/closing-date - Get bid submission closing date
 // This endpoint is read-only but requires authentication for security
 export async function GET(request: NextRequest) {
   try {
-    const user = await getUserFromRequest(request)
-    
-    if (!user) {
+    const { user, token } = await getUserAndTokenFromRequest(request)
+
+    if (!user || !token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Fetch the closing date from bid_opening_settings table
-    // Using service role to ensure we can read the data
-    const { data, error } = await (supabaseAdmin as any)
+    // Must use user JWT: anon client without session cannot read bid_opening_settings under RLS
+    const supabaseUser = createServerSupabaseClient(token)
+
+    const { data, error } = await supabaseUser
       .from('bid_opening_settings')
       .select('bid_submission_closing_date')
       .maybeSingle()

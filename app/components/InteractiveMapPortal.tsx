@@ -367,7 +367,7 @@ export default function InteractiveMapPortal({
     if (!selectedArea) return
     if (purchasedAreaIds.has(selectedArea.id)) return
     addToCart(areaToCartArea(selectedArea))
-    const path = '/bidding-portal?tab=opened-bidding&openCart=1'
+    const path = '/bidding-portal/opened-bidding?openCart=1'
     if (user) {
       router.push(path)
     } else {
