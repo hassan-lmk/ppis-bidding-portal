@@ -54,9 +54,9 @@ function LoginContent() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 w-full grid grid-cols-1 lg:grid-cols-2">
+    <div className="min-h-dvh lg:h-dvh lg:max-h-dvh lg:overflow-hidden bg-slate-100 w-full grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-1 min-h-0">
       {/* Left: visual panel */}
-      <div className="relative order-2 lg:order-1 min-h-[620px] lg:min-h-full overflow-hidden flex flex-col justify-between px-8 py-8 md:px-10 md:py-10 lg:pl-12 lg:pr-0 lg:py-12 xl:pl-16 xl:pr-0 xl:py-16 text-white bg-gradient-to-br from-[#317070] via-teal-700 to-teal-900">
+      <div className="relative order-2 lg:order-1 min-h-0 max-lg:min-h-[min(100dvh,520px)] overflow-hidden flex flex-col px-8 pt-6 pb-0 md:px-10 md:pt-8 md:pb-0 lg:pl-12 lg:pr-0 lg:pt-10 lg:pb-0 xl:pl-16 xl:pr-0 xl:pt-12 xl:pb-0 text-white bg-gradient-to-br from-[#317070] via-teal-700 to-teal-900">
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.12]"
           style={{
@@ -64,7 +64,7 @@ function LoginContent() {
           }}
         />
 
-        <div className="relative z-10 space-y-4">
+        <div className="relative z-10 space-y-4 shrink-0">
           <div className="flex items-center gap-3">
             <Link
               href="/"
@@ -81,7 +81,7 @@ function LoginContent() {
               className="h-9 w-auto"
             />
           </div>
-          <h2 className="text-2xl md:text-3xl font-bold leading-tight max-w-md">
+          <h2 className="text-2xl md:text-3xl font-bold leading-tight max-w-2xl">
             Access purchased documents, submit bid applications, and manage your complete bidding workflow.
           </h2>
           <p className="text-sm md:text-base text-teal-100/95 max-w-md leading-relaxed">
@@ -89,13 +89,13 @@ function LoginContent() {
           </p>
         </div>
 
-        <div className="relative z-10 mt-8 lg:mt-auto w-full flex justify-end items-end">
-          <div className="relative h-[360px] md:h-[460px] lg:h-[72vh] xl:h-[78vh] w-[145%] lg:w-[165%] ml-auto">
+        <div className="relative z-10 mt-6 flex min-h-0 flex-1 basis-0 w-full flex-col items-center justify-end">
+          <div className="relative min-h-0 flex-1 basis-0 w-full max-w-full">
             <Image
               src="/images/signup-mockup-image.png"
               alt="Bidding portal preview"
               fill
-              className="object-contain object-[right_bottom]"
+              className="object-contain object-[center_bottom]"
               sizes="(min-width: 1024px) 50vw, 100vw"
               priority={false}
             />
@@ -104,8 +104,8 @@ function LoginContent() {
       </div>
 
       {/* Right: login form */}
-      <div className="order-1 lg:order-2 flex flex-col justify-center bg-white p-8 md:p-10 lg:p-12 xl:px-20 2xl:px-28 lg:min-h-full">
-        <div className="mx-auto w-full max-w-md lg:max-w-lg xl:max-w-xl space-y-6">
+      <div className="order-1 lg:order-2 flex flex-col justify-center bg-white p-6 md:p-8 lg:p-10 xl:px-16 2xl:px-24 min-h-0 overflow-y-auto overscroll-contain lg:overflow-hidden">
+        <div className="mx-auto w-full max-w-md lg:max-w-lg xl:max-w-xl space-y-5 py-2">
           <div className="space-y-4">
             <div>
               <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">
@@ -206,7 +206,7 @@ function LoginContent() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="h-dvh max-h-dvh bg-gray-50 flex items-center justify-center">
         <Loader2 className="w-12 h-12 animate-spin text-teal-600" />
       </div>
     }>

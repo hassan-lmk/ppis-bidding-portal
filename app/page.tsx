@@ -13,8 +13,8 @@ export default function HomePage() {
   const { user, loading: authLoading } = useAuth()
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-950">
-      <section className="relative min-h-screen flex flex-col overflow-x-hidden">
+    <div className="h-dvh max-h-dvh flex flex-col bg-gray-950 overflow-hidden">
+      <section className="relative flex flex-1 min-h-0 flex-col overflow-hidden">
         <Image
           src={HERO_BG}
           alt=""
@@ -31,9 +31,9 @@ export default function HomePage() {
 
         <PublicSiteHeader variant="heroOverlay" />
 
-        <div className="relative z-10 flex-1 flex w-full min-h-0 pb-6 lg:pb-0">
-          <div className="w-full flex flex-col lg:flex-row lg:items-stretch flex-1 min-h-[calc(100dvh-3.5rem)]">
-            <div className="px-4 sm:px-6 lg:pl-6 lg:pr-8 xl:pl-8 flex flex-col justify-center shrink-0 py-8 md:py-10 lg:py-0 lg:w-[min(100%,36rem)] xl:w-[min(100%,42rem)]">
+        <div className="relative z-10 flex-1 flex w-full min-h-0 overflow-hidden">
+          <div className="w-full flex flex-col lg:flex-row lg:items-stretch flex-1 min-h-0 gap-0">
+            <div className="px-4 sm:px-6 lg:pl-6 lg:pr-8 xl:pl-8 flex flex-col justify-center shrink-0 py-6 sm:py-8 lg:py-4 lg:w-[min(100%,36rem)] xl:w-[min(100%,42rem)] min-h-0 overflow-y-auto lg:overflow-visible">
               <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-5xl xl:text-6xl font-bold text-white tracking-tight drop-shadow-sm text-center lg:text-left">
                 Pakistan Petroleum Information Services Bidding Portal
               </h1>
@@ -74,18 +74,17 @@ export default function HomePage() {
               )}
             </div>
 
-            <div
-              className="relative flex-1 flex items-end lg:items-center justify-end min-h-[200px] lg:min-h-0 pr-0 mr-0 w-full lg:w-auto shrink lg:grow"
-            >
-              <Image
-                src="/images/918shots_so.png"
-                alt="PPIS Bidding Portal dashboard preview showing sidebar navigation and interactive map"
-                width={1920}
-                height={1440}
-                className="w-auto h-auto max-h-[min(58vh,calc(100dvh-7rem))] sm:max-h-[min(68vh,calc(100dvh-5rem))] lg:max-h-[calc(100dvh-1.75rem)] xl:max-h-[calc(100dvh-1rem)] max-w-none object-contain object-right ml-auto"
-                sizes="(max-width: 1024px) 100vw, 65vw"
-                quality={90}
-              />
+            <div className="relative flex-1 flex min-h-0 items-end lg:items-stretch justify-end pr-0 mr-0 w-full lg:w-auto shrink lg:grow">
+              <div className="relative w-full lg:flex-1 min-h-[180px] sm:min-h-[220px] lg:min-h-0 h-[min(52dvh,calc(100dvh-8rem))] sm:h-[min(60dvh,calc(100dvh-6rem))] lg:h-full max-h-full">
+                <Image
+                  src="/images/918shots_so.png"
+                  alt="PPIS Bidding Portal dashboard preview showing sidebar navigation and interactive map"
+                  fill
+                  className="object-contain object-right"
+                  sizes="(max-width: 1024px) 100vw, 72vw"
+                  quality={90}
+                />
+              </div>
             </div>
           </div>
         </div>
